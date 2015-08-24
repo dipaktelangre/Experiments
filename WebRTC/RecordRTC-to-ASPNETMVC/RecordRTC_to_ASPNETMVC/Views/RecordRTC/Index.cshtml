@@ -1,0 +1,350 @@
+﻿@{
+    ViewBag.Title = "Index";
+    Layout = null;
+}
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>RecordRTC to ASP.NET MVC ® Muaz Khan</title>
+
+
+
+    <link href="../../Style/style.css" rel="stylesheet" />
+    <script src="../../Scripts/jquery.min.js"></script>
+    <script src="../../Scripts/RecordRTC.js"></script>
+    <style>
+        audio
+        {
+            vertical-align: bottom;
+            width: 10em;
+        }
+
+        video
+        {
+            vertical-align: top;
+            max-width: 100%;
+        }
+
+        input
+        {
+            border: 1px solid #d9d9d9;
+            border-radius: 1px;
+            font-size: 2em;
+            margin: .2em;
+            width: 30%;
+        }
+
+        p, .inner
+        {
+            padding: 1em;
+        }
+
+        li
+        {
+            border-bottom: 1px solid rgb(189, 189, 189);
+            border-left: 1px solid rgb(189, 189, 189);
+            padding: .5em;
+        }
+
+        label
+        {
+            display: inline-block;
+            width: 8em;
+        }
+    </style>
+    <script>
+        document.createElement('article');
+        document.createElement('footer');
+    </script>
+
+   
+</head>
+
+<body>
+
+
+
+    <div class="github-stargazers"></div>
+
+    <section class="experiment">
+
+
+        <p style="text-align: center;">
+            <video id="preview" controls style="border: 1px solid rgb(15, 158, 238); height: 240px; width: 320px;"></video>
+        </p>
+        <hr />
+
+        <button id="record">Record</button>
+        <button id="stop" disabled>Stop</button>
+        <button id="delete" disabled>Delete your webm/wav files from Server</button>
+
+        <div id="container" style="padding: 1em 2em;"></div>
+    </section>
+
+
+
+    <script>
+        // PostBlob method uses XHR2 and FormData to submit 
+        // recorded blob to the PHP server
+        function PostBlob(blob, fileType, fileName, callback) {
+            // FormData
+            var formData = new FormData();
+            formData.append(fileType + '-filename', fileName);
+            formData.append(fileType + '-blob', blob);
+            //++activeAjaxConnections;
+            var option = {
+                type: 'POST',
+                url: '/RecordRTC/PostRecordedAudioVideo',
+                data: formData,
+                processData: false,
+                contentType: false
+            };
+            $.ajax(option).done(callback)
+            .error(function () {
+               
+            });
+
+
+        }
+
+        var showStatus = function (msg) {
+            var date = new Date();
+            var time = date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds() + ":" + date.getMilliseconds();
+            console.log(time + "-->" + msg);
+        };
+
+        var checkStatus = function (url, logFile) {
+            //console.log("Url" + url);
+            var option = {
+                url: url,
+                type: 'GET',
+                dataType: 'json',
+                data : {logFile : logFile}
+            };
+            $.ajax(option).done(function (data) {
+                data = $.parseJSON(data);
+                showStatus(data.StatusMessage);
+                if (data.State != "completed") {
+                    setTimeout(function() {
+                        checkStatus(url, logFile);
+                    }, 1000);
+                }
+            });
+        };
+
+
+        function ConvertToMp4(fileName) {
+            // FormData
+            var formData = new FormData();
+            formData.append("audio" + '-filename', fileName + ".wav");
+            formData.append("video" + '-filename', fileName + ".webm");
+            var fileType = "video";
+
+            // Check for status of server 
+
+            checkStatus("/RecordRTC/CheckStatus", fileName+".txt");
+            $.ajax({
+                    type: 'POST',
+                    url: '/RecordRTC/ConvertFile',
+                    data: formData,
+                    processData: false,
+                    contentType: false
+                }).done(function(data) {
+                    
+                    container.appendChild(document.createElement('hr'));
+                    var mediaElement = document.createElement(fileType);
+
+                    var source = document.createElement('source');
+                    source.src = location.href + 'uploads/' + data.replace(/"/g, '');
+
+                    if (fileType == 'video') source.type = 'video/webm; codecs="vp8, vorbis"';
+                    if (fileType == 'audio') source.type = !!navigator.mozGetUserMedia ? 'audio/ogg' : 'audio/wav';
+
+                    mediaElement.appendChild(source);
+
+                    mediaElement.controls = true;
+                    container.appendChild(mediaElement);
+                    mediaElement.play();
+                })
+                .error(function() {
+
+                });
+        }
+
+
+        function xhr(url, data, progress, percentage, callback) {
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function () {
+                if (request.readyState == 4 && request.status == 200) {
+                    callback(request.responseText);
+                }
+            };
+
+            if (url.indexOf('/RecordRTC/DeleteFile') == -1) {
+                request.upload.onloadstart = function () {
+                    percentage.innerHTML = 'Upload started...';
+                };
+
+                request.upload.onprogress = function (event) {
+                    progress.max = event.total;
+                    progress.value = event.loaded;
+                    percentage.innerHTML = 'Upload Progress ' + Math.round(event.loaded / event.total * 100) + "%";
+                };
+
+                request.upload.onload = function () {
+                    percentage.innerHTML = 'Saved!';
+                };
+            }
+
+            request.open('POST', url);
+            request.send(data);
+        }
+
+
+        var audioUploadCallback = function audioUploaded(data) {
+            --fileToUpload;
+            if (fileToUpload <= 0) {
+                //console.log("Converting File ->" + fileName);
+                ConvertToMp4(fileNameStored);
+            }
+
+        };
+
+        var videoUploadCallback = function(data) {
+            --fileToUpload;
+            if (fileToUpload <= 0) {
+                //console.log("Converting File ->" + fileName);
+                ConvertToMp4(fileNameStored);
+            }
+        };
+
+        var record = document.getElementById('record');
+        var stop = document.getElementById('stop');
+        var deleteFiles = document.getElementById('delete');
+
+        var audio = document.querySelector('audio');
+
+        var recordVideo = document.getElementById('record-video');
+        var preview = document.getElementById('preview');
+
+        var container = document.getElementById('container');
+
+        // if you want to record only audio on chrome
+        // then simply set "isFirefox=true"
+        var isFirefox = !!navigator.mozGetUserMedia;
+        //This to store the active ajax conection 
+        var activeAjaxConnections = 0;
+
+        var fileToUpload = 2;
+
+        var recordAudio, recordVideo;
+        record.onclick = function () {
+            record.disabled = true;
+            navigator.getUserMedia({
+                audio: true,
+                video: true
+            }, function (stream) {
+                preview.src = window.URL.createObjectURL(stream);
+                preview.play();
+
+                // var legalBufferValues = [256, 512, 1024, 2048, 4096, 8192, 16384];
+                // sample-rates in at least the range 22050 to 96000.
+                recordAudio = RecordRTC(stream, {
+                    //bufferSize: 16384,
+                    //sampleRate: 45000,
+                    onAudioProcessStarted: function () {
+                        if (!isFirefox) {
+                            recordVideo.startRecording();
+                        }
+                    }
+                });
+
+                if (isFirefox) {
+                    recordAudio.startRecording();
+                }
+
+                if (!isFirefox) {
+                    recordVideo = RecordRTC(stream, {
+                        type: 'video'
+                    });
+                    recordAudio.startRecording();
+                }
+
+                stop.disabled = false;
+            }, function (error) {
+                alert(JSON.stringify(error, null, '\t'));
+            });
+        };
+
+        var fileName;
+        var fileNameStored;
+        stop.onclick = function () {
+            record.disabled = false;
+            stop.disabled = true;
+
+            preview.src = '';
+
+            fileName = Math.round(Math.random() * 99999999) + 99999999;
+            fileNameStored = fileName;
+            if (!isFirefox) {
+                recordAudio.stopRecording(function () {
+                    PostBlob(recordAudio.getBlob(), 'audio', fileName + '.wav', audioUploadCallback);
+                });
+            } else {
+                recordAudio.stopRecording(function (url) {
+                    preview.src = url;
+                    PostBlob(recordAudio.getBlob(), 'video', fileName + '.webm');
+                });
+            }
+
+            if (!isFirefox) {
+                recordVideo.stopRecording(function () {
+                    PostBlob(recordVideo.getBlob(), 'video', fileName + '.webm', videoUploadCallback);
+                });
+            }
+
+
+            // Convert File On server 
+            // ConvertToMp4(fileName);
+
+
+
+            deleteFiles.disabled = false;
+        };
+
+        deleteFiles.onclick = function () {
+            deleteAudioVideoFiles();
+        };
+
+        function deleteAudioVideoFiles() {
+            deleteFiles.disabled = true;
+            if (!fileName) return;
+            var formData = new FormData();
+            formData.append('delete-file', fileName);
+            xhr('/RecordRTC/DeleteFile', formData, null, null, function (response) {
+                //console.log(response);
+            });
+            fileName = null;
+            container.innerHTML = '';
+        }
+
+
+
+        window.onbeforeunload = function () {
+            if (!!fileName) {
+                deleteAudioVideoFiles();
+                return 'It seems that you\'ve not deleted audio/video files from the server.';
+            }
+        };
+
+        //$(document).ajaxStop(function () {
+        //    ConvertToMp4(fileNameStored);
+        //});
+    </script>
+
+</body>
+</html>
+
+
