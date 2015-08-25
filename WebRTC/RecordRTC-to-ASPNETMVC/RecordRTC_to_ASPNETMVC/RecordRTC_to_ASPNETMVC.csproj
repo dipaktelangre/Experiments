@@ -79,6 +79,7 @@
     <Content Include="Converter\ffmpeg.exe" />
     <Content Include="Global.asax" />
     <Content Include="Scripts\jquery.min.js" />
+    <Content Include="Scripts\MediaStreamRecorder.js" />
     <Content Include="Scripts\recorder.js" />
     <Content Include="Scripts\RecordRTC.js" />
     <Content Include="Style\style.css" />
@@ -97,6 +98,7 @@
     <None Include="Controllers\README.md" />
     <Content Include="Views\RecordRTC\Index.cshtml" />
     <None Include="uploads\README.md" />
+    <Content Include="Views\RecordRTC\MultiStramRecorder.cshtml" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

@@ -1,0 +1,99 @@
+
+#Merge files  -----------------FFMPEG
+
+ffmpeg -i -i 113608079v.webm -i 168598803v.webm -filter_complex "[0:v] [0:a:0] [1:v] [1:a:0] concat=n=2:v=1:a=1 [v] [a]" -map "[v]" -map "[a]" output.webm
+
+# Concat all files from txt file 
+ffmpeg -f concat -i f.txt -c copy Audio1.wav
+
+f.txt --------- > 
+	file '1.wav'
+	file '2.wav'
+
+
+# Merge Audio and Video Files 
+ffmpeg -i Audio1.wav -i Video1.webm AV1.webm
+
+
+
+
+
+
+
+#----------------------------------------------------------- 
+
+
+var mediaConstraints = {
+    audio: true,
+    video: true
+};
+
+navigator.getUserMedia(mediaConstraints, onMediaSuccess, onMediaError);
+
+function onMediaSuccess(stream) {
+    var audioRecorder = new MediaStreamRecorder(stream);
+    var videoRecorder = new MediaStreamRecorder(stream);
+
+    audioRecorder.mimeType = 'audio/wav';
+    videoRecorder.mimeType = 'video/webm';
+
+    audioRecorder.ondataavailable = videoRecorder.ondataavailable = function(blob) {
+        // POST/PUT "Blob" using FormData/XHR2
+        var blobURL = URL.createObjectURL(blob);
+        document.write('<a href="' + blobURL + '">' + blobURL + '</a>');
+    };
+
+    audioRecorder.start(3000);
+    videoRecorder.start(3000);
+}
+
+function onMediaError(e) {
+    console.error('media error', e);
+}
+If you want to get both audio/video blobs in the same ondataavailable request, then it requires a little bit extra modifications. E.g.
+
+var mediaConstraints = {
+    audio: true,
+    video: true
+};
+
+navigator.getUserMedia(mediaConstraints, onMediaSuccess, onMediaError);
+
+function onMediaSuccess(stream) {
+    var audioRecorder = new MediaStreamRecorder(stream);
+    var videoRecorder = new MediaStreamRecorder(stream);
+
+    audioRecorder.mimeType = 'audio/wav';
+    videoRecorder.mimeType = 'video/webm';
+
+    var audioBlobs = [];
+    var videoBlobs = [];
+
+    audioRecorder.ondataavailable = function(blob) {
+        audioBlobs.push(blob);
+
+        if (audioBlobs.length == videoBlobs.length) {
+            var audioBlob = audioBlobs[audioBlobs.length];
+            var videoBlob = videoBlobs[videoBlobs.length];
+            // do XHR here
+        }
+
+    };
+
+    videoRecorder.ondataavailable = function(blob) {
+        videoBlobs.push(blob);
+
+        if (audioBlobs.length == videoBlobs.length) {
+            var audioBlob = audioBlobs[audioBlobs.length];
+            var videoBlob = videoBlobs[videoBlobs.length];
+            // do XHR here
+        }
+    };
+
+    audioRecorder.start(3000);
+    videoRecorder.start(3000);
+}
+
+function onMediaError(e) {
+    console.error('media error', e);
+}

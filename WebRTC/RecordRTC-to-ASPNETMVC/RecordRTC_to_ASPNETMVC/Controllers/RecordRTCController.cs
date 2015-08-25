@@ -20,6 +20,12 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
             return View();
         }
 
+
+        public ActionResult MultiStramRecorder()
+        {
+            return View();
+        }
+
         // ---/RecordRTC/PostRecordedAudioVideo
        [HttpPost]
         public ActionResult PostRecordedAudioVideo()

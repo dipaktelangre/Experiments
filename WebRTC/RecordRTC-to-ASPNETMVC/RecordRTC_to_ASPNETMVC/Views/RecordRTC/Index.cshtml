@@ -90,6 +90,8 @@
         // recorded blob to the PHP server
         function PostBlob(blob, fileType, fileName, callback) {
             // FormData
+            console.log("Size " + blob.size);
+
             var formData = new FormData();
             formData.append(fileType + '-filename', fileName);
             formData.append(fileType + '-blob', blob);
@@ -144,7 +146,9 @@
 
             // Check for status of server 
 
-            checkStatus("/RecordRTC/CheckStatus", fileName+".txt");
+            //checkStatus("/RecordRTC/CheckStatus", fileName+".txt");
+
+
             $.ajax({
                     type: 'POST',
                     url: '/RecordRTC/ConvertFile',
@@ -153,20 +157,20 @@
                     contentType: false
                 }).done(function(data) {
                     
-                    container.appendChild(document.createElement('hr'));
-                    var mediaElement = document.createElement(fileType);
+                    //container.appendChild(document.createElement('hr'));
+                    //var mediaElement = document.createElement(fileType);
 
-                    var source = document.createElement('source');
-                    source.src = location.href + 'uploads/' + data.replace(/"/g, '');
+                    //var source = document.createElement('source');
+                    //source.src = location.href + 'uploads/' + data.replace(/"/g, '');
 
-                    if (fileType == 'video') source.type = 'video/webm; codecs="vp8, vorbis"';
-                    if (fileType == 'audio') source.type = !!navigator.mozGetUserMedia ? 'audio/ogg' : 'audio/wav';
+                    //if (fileType == 'video') source.type = 'video/webm; codecs="vp8, vorbis"';
+                    //if (fileType == 'audio') source.type = !!navigator.mozGetUserMedia ? 'audio/ogg' : 'audio/wav';
 
-                    mediaElement.appendChild(source);
+                    //mediaElement.appendChild(source);
 
-                    mediaElement.controls = true;
-                    container.appendChild(mediaElement);
-                    mediaElement.play();
+                    //mediaElement.controls = true;
+                    //container.appendChild(mediaElement);
+                    //mediaElement.play();
                 })
                 .error(function() {
 
@@ -240,6 +244,8 @@
         var fileToUpload = 2;
 
         var recordAudio, recordVideo;
+
+        //Record
         record.onclick = function () {
             record.disabled = true;
             navigator.getUserMedia({
@@ -273,11 +279,28 @@
                 }
 
                 stop.disabled = false;
+
+                /// Testing interval\
+                debugger;
+                setInterval(function () {
+                    fileName = Math.round(Math.random() * 99999999) + 99999999;
+                    fileNameStored = fileName;
+
+                    PostBlob(recordAudio.getBlob(), 'audio', fileName + '.wav', audioUploadCallback);
+                    PostBlob(recordVideo.getBlob(), 'video', fileName + '.webm', videoUploadCallback);
+
+                    //recordAudio.clear();
+                    //recordVideo.clear();
+
+                }, 10000);
+
             }, function (error) {
                 alert(JSON.stringify(error, null, '\t'));
             });
         };
 
+
+        //Stop Recording
         var fileName;
         var fileNameStored;
         stop.onclick = function () {

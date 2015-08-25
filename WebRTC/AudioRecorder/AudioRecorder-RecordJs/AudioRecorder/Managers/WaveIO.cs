@@ -105,7 +105,6 @@ namespace Concatenation_Waves
 
                 fs.Read(arrfile, 0, arrfile.Length);
                 fs.Close();
-
                 
                 bw.Write(arrfile);
                 bw.Close();

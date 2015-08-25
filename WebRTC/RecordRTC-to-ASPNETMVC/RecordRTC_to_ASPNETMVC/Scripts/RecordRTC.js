@@ -334,6 +334,16 @@ function RecordRTC(mediaStream, config) {
             return mediaRecorder.blob;
         },
 
+        // Dipak 
+        clear : function() {
+            if (!mediaRecorder) {
+                return console.warn(WARNING);
+            }
+             console.log("Clearing the blob");
+            return mediaRecorder.blob = null;
+        },
+
+
         /**
          * This method returns DataURL. It takes single "callback" argument.
          * @param {function} callback - DataURL is passed back over this callback.
