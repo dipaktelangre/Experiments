@@ -20,7 +20,7 @@
 
   var audio_context;
   var recorder;
-
+  var fileName;
   function startUserMedia(stream) {
     var input = audio_context.createMediaStreamSource(stream);
     __log('Media stream created.');
@@ -38,6 +38,14 @@
     button.disabled = true;
     button.nextElementSibling.disabled = false;
     __log('Recording...');
+
+       fileName = new Date().getTime();
+      uploadInterval = setInterval(function() {
+          recorder && recorder.exportWAV(function (blob) {
+              upload(blob,fileName);
+          });
+          recorder.clear();
+      }, 5000);
   }
 
   function stopRecording(button) {
@@ -46,9 +54,15 @@
     button.previousElementSibling.disabled = false;
     __log('Stopped recording.');
     
-    // create WAV download link using audio data blob
-    createDownloadLink();
-    
+      // create WAV download link using audio data blob
+      //clear Interval
+    clearInterval(uploadInterval);
+
+      console.log("Stoping ... Upload last chunk");
+      recorder && recorder.exportWAV(function (blob) {
+          upload(blob, fileName);
+      });
+    //createDownloadLink();
     recorder.clear();
   }
 
@@ -67,18 +81,26 @@
       li.appendChild(au);
       li.appendChild(hf);
       recordingslist.appendChild(li);
-      upload(blob);
+      upload(blob,fileName);
     });
+      
   }
 
-  function upload(blobOrFile) {
+  function upload(blobOrFile, fileName) {
+      var date = new Date();
+      var time = date.getHours() +":"+ date.getMinutes()+":" +date.getSeconds() + ":" +date.getMilliseconds();
+      console.log("Upoloading .. :" + fileName + " :->" + blobOrFile.type + " Size (MB): " + blobOrFile.size/(1024*1024));
       var xhr = new XMLHttpRequest();
+      var data = new FormData();
+      data.append("blob", blobOrFile);
+      data.append("fileName", fileName);
+
       xhr.open('POST', '/Home/Upload', true);
       xhr.onload = function (e) {
           var result = e.target.result;
       };
 
-      xhr.send(blobOrFile);
+      xhr.send(data);
   }
 
   window.onload = function init() {

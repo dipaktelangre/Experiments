@@ -191,3 +191,5 @@ FakesAssemblies/
 #web.config.*
 *.xsd
 *.orig
+
+WebRTC/AudioRecorder/AudioRecorder-RecordJs/AudioRecorder/Files/*
