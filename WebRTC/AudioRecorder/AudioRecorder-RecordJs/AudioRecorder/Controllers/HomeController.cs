@@ -58,24 +58,25 @@ namespace AudioRecorder.Controllers
                     string tempFile = Path.Combine(folder, fileName+"-temp" + ".wav");
                     file.SaveAs(tempFile);
                     string[] filesToMerge = new string[2] {filePath,tempFile};
+                    //string[] filesToMerge = new string[1] {tempFile };
 
-                    WaveIO wa = new WaveIO();
-                    wa.Merge(filesToMerge, outFilePath);
+                    using (WaveIO wa = new WaveIO())
+                    {
+                        wa.Merge(filesToMerge, outFilePath);
 
-                    System.IO.File.Delete(filePath);
-                    System.IO.File.Delete(tempFile);
-                    System.IO.File.Move(outFilePath, filePath);
+                        //Append new file with exising file 
+                        //wa.Append(filePath, tempFile);
 
+                        System.IO.File.Delete(filePath);
+                        System.IO.File.Delete(tempFile);
+                        System.IO.File.Move(outFilePath, filePath);
+                    }
                 }
 
                 //var blob = Request.Form["blob"];
 
                 //Request.SaveAs(Server.MapPath("~/" + "Files/" + fileSuffix + ".wav"), false);
                 //uploadManager.Upload(Request.Files, folder, fileSuffix);
-
-                
-
-
 
                 return this.Json(new { Success = true, Status = "Uploaded Successfully" });
             }
