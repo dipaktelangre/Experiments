@@ -11,8 +11,10 @@
         <title>MultiStreamRecorder.js & MediaStreamRecorder</title>
 
         
-        <script src="https://cdn.webrtc-experiment.com/MediaStreamRecorder.js"></script>
-        
+        @*<script src="https://cdn.webrtc-experiment.com/MediaStreamRecorder.js"></script>*@
+
+        <script src="../../Scripts/jquery.min.js"></script>
+        <script src="../../Scripts/MediaStreamRecorder.js"></script>
         <style>
             input {
                 border: 1px solid rgb(46, 189, 235);
@@ -47,9 +49,9 @@
             // '320:180']
             var resolution_x = 1280;
             var resolution_y = 720;
-            
-            var mediaConstraints = { 
-                audio: true, 
+
+            var mediaConstraints = {
+                audio: true,
                 video: {
                     mandatory: {
                         maxWidth: resolution_x,
@@ -60,40 +62,69 @@
                     }
                 }
             };
-            
+
             document.querySelector('#start-recording').onclick = function() {
                 this.disabled = true;
                 navigator.getUserMedia(mediaConstraints, onMediaSuccess, onMediaError);
             };
-            
+
             document.querySelector('#stop-recording').onclick = function() {
                 this.disabled = true;
-                multiStreamRecorder.stop();
-                
-                if(multiStreamRecorder.stream) {
-                    multiStreamRecorder.stream.stop();
-                }
+                //multiStreamRecorder.stop();
+
+                audioRecorder.stop();
+                videoRecorder.stop();
+
+                if (audioRecorder.stream)
+                    audioRecorder.stream.stop();
+                if (videoRecorder.stream)
+                    videoRecorder.stream.stop();
+
+                recordingStopped = true;
+
+                mergeChunkFiles(mainFileName);
+
+                //var checkFileUploadStatues = setInterval(function() {
+                //    if (convertedFileCounter == uploadedFileCounter / 2) {
+                //        clearInterval(checkFileUploadStatues);
+                //        mergeChunkFiles(mainFileName);
+                //    }
+                //}, 2000);
+
+                //if(multiStreamRecorder.stream) {
+                //    multiStreamRecorder.stream.stop();
+                //}
             };
-            
+
             var multiStreamRecorder;
-            
+
             //var audioVideoBlobs = {};
             //var recordingInterval = 0;
-            
 
+            var fileToUpload = 0;
+            var convertedFileCounter = 0;
+            var audioFileCounter = 0;
+            var videoFileCounter = 0;
+            var uploadedFileCounter = 0;
 
+            var audioRecorder;
+            var videoRecorder;
+            var fileNameStored;
+            var recordingStopped = false;
+            var mainFileName;
             function onMediaSuccess(stream) {
 
                 var video = document.createElement('video');
 
                 video = mergeProps(video, {
-                            controls: true,
-                            src: URL.createObjectURL(stream)
-                        });
-
+                    controls: true,
+                    src: URL.createObjectURL(stream)
+                });
+            
+                 mainFileName = new Date().getTime();
                 video.addEventListener('loadedmetadata', function() {
-                    var audioRecorder = new MediaStreamRecorder(stream);
-                    var videoRecorder = new MediaStreamRecorder(stream);
+                    audioRecorder = new MediaStreamRecorder(stream);
+                    videoRecorder = new MediaStreamRecorder(stream);
                     audioRecorder.mimeType = 'audio/wav';
                     videoRecorder.mimeType = 'video/webm';
 
@@ -102,31 +133,143 @@
 
                     videoRecorder.video = video;
 
-                    audioRecorder.ondataavailable = videoRecorder.ondataavailable = function (blob) {
-                        // POST/PUT "Blob" using FormData/XHR2
-                        //var blobURL = URL.createObjectURL(blob);
-                        //document.write('<a href="' + blobURL + '">' + blobURL + '</a>');
 
-                        appendLink(blob);
+                    audioRecorder.ondataavailable = function(blob) {
+                        //appendLink(blob);
+                        debugger;
+                        ++fileToUpload;
+                        var audioFileName = mainFileName + "-" + audioFileCounter + ".wav";
+                        fileNameStored = mainFileName + "-" + audioFileCounter;
+                        ++audioFileCounter;
+                        //PostBlob(blob, "audio", audioFileName, mainFileName, audioUploadCallback);
+
+                        PostBlob(blob, "audio", audioFileName, mainFileName, function(data) {
+                            --fileToUpload;
+                            ++uploadedFileCounter;
+                            if (fileToUpload <= 0 && (convertedFileCounter <= audioFileCounter)) {
+                                var temp = mainFileName + "-" + convertedFileCounter;
+                                console.log("Converting File -> " + temp);
+                                ConvertToMp4(temp, mainFileName);
+                            }
+                        });
+
+                    };
+
+                    videoRecorder.ondataavailable = function(blob) {
+                        //appendLink(blob);
+
+                        ++fileToUpload;
+                        var videoFileName = mainFileName + "-" + videoFileCounter + ".webm";
+
+                        ++videoFileCounter;
+                        //PostBlob(blob, "video", videoFileName, mainFileName,videoUploadCallback);
+                        PostBlob(blob, "video", videoFileName, mainFileName, function(data) {
+                            var temp = mainFileName + "-" + convertedFileCounter;
+                            console.log("Converting File -> " + temp);
+
+                            --fileToUpload;
+                            ++uploadedFileCounter;
+                            if (fileToUpload <= 0 && (convertedFileCounter <= videoFileCounter)) {
+                                //console.log("Converting File ->" + fileName);
+                                ConvertToMp4(temp, mainFileName);
+                            }
+                        });
                     };
 
                     //var timeInterval = document.querySelector('#time-interval').value;
                     //if (timeInterval)
                     //        timeInterval = parseInt(timeInterval);
                     //else timeInterval = 30 * 1000;
-                    timeInterval = 30 * 1000;
+                    timeInterval = 50 * 1000;
                     audioRecorder.start(timeInterval);
-
                     videoRecorder.start(timeInterval);
-                });
-               
-                video.play();
 
+                });
+
+                video.play();
+                document.querySelector('#stop-recording').disabled = false;
                 container.appendChild(video);
                 container.appendChild(document.createElement('hr'));
             }
 
-            
+
+            var audioUploadCallback = function audioUploaded(mainFileName) {
+                --fileToUpload;
+                if (fileToUpload <= 0 && (convertedFileCounter <= audioFileCounter)) {
+                    //console.log("Converting File ->" + fileName);
+                    ConvertToMp4(mainFileName + "-" + convertedFileCounter);
+                }
+
+            };
+
+            var videoUploadCallback = function(mainFileName) {
+                --fileToUpload;
+                if (fileToUpload <= 0 && (convertedFileCounter <= videoFileCounter)) {
+                    //console.log("Converting File ->" + fileName);
+                    ConvertToMp4(mainFileName + "-" + convertedFileCounter);
+                }
+            };
+
+
+            function ConvertToMp4(fileName, mainFileName) {
+                // FormData
+                var formData = new FormData();
+                formData.append("audio" + '-filename', fileName + ".wav");
+                formData.append("video" + '-filename', fileName + ".webm");
+                formData.append("mainFileName", mainFileName);
+                var fileType = "video";
+
+                // Check for status of server 
+
+                //checkStatus("/RecordRTC/CheckStatus", fileName+".txt");
+
+
+                $.ajax({
+                        type: 'POST',
+                        url: '/RecordRTC/ConvertFile',
+                        data: formData,
+                        processData: false,
+                        contentType: false
+                    }).done(function(data) {
+
+                        ++convertedFileCounter;
+                        console.log("File converted counter" + fileName);
+                        //container.appendChild(document.createElement('hr'));
+                        //var mediaElement = document.createElement(fileType);
+
+                        //var source = document.createElement('source');
+                        //source.src = location.href + 'uploads/' + data.replace(/"/g, '');
+
+                        //if (fileType == 'video') source.type = 'video/webm; codecs="vp8, vorbis"';
+                        //if (fileType == 'audio') source.type = !!navigator.mozGetUserMedia ? 'audio/ogg' : 'audio/wav';
+
+                        //mediaElement.appendChild(source);
+
+                        //mediaElement.controls = true;
+                        //container.appendChild(mediaElement);
+                        //mediaElement.play();
+                    })
+                    .error(function () {
+
+                    });
+            }
+
+            /// Call when recording stopped to mergre all files and create final file 
+            function mergeChunkFiles(mainFileName) {
+                var option = {
+                    url: "/RecordRTC/MergeChunkFiles",
+                    type: "POST",
+                    data : {mainFileName : mainFileName}
+                };
+
+                $.ajax(option).done(function(data) {
+                    var video = document.createElement("video");
+                    video.src = "/uploads/" + data;
+                    container.appendChild(video);
+                    container.appendChild(document.createElement('hr'));
+                });
+            }
+
             function appendLink(blob) {
                 var a = document.createElement('a');
                 a.target = '_blank';
@@ -164,112 +307,33 @@
                 document.querySelector('#start-recording').disabled = false;
             };
 
-            ///----------------------- Temp Data 
-            function onMediaSuccessTemp(stream) {
-                var video = document.createElement('video');
 
-                video = mergeProps(video, {
-                    controls: true,
-                    src: URL.createObjectURL(stream)
+
+
+            function PostBlob(blob, fileType, fileName, mainFileName, callback) {
+                // FormData
+                console.log("Size " + blob.size);
+
+                var formData = new FormData();
+                formData.append(fileType + '-filename', fileName);
+                formData.append(fileType + '-blob', blob);
+                formData.append("chunkFileName", fileName);
+                formData.append("mainFileName", mainFileName);
+                //++activeAjaxConnections;
+                var option = {
+                    type: 'POST',
+                    url: '/RecordRTC/PostRecordedAudioVideo',
+                    data: formData,
+                    processData: false,
+                    contentType: false
+                };
+                $.ajax(option).done(callback)
+                .error(function () {
+
                 });
 
-                //video.width = resolution_x;
-                //video.height = resolution_y;
 
-                video.addEventListener('loadedmetadata', function () {
-                    //multiStreamRecorder = new MultiStreamRecorder(stream);
-
-                    var audioRecorder = new MultiStreamRecorder(stream);
-                    var videoRecorder = new MultiStreamRecorder(stream);
-
-                    audioRecorder.mimeType = 'audio/wav';
-                    videoRecorder.mimeType = 'video/webm';
-
-                    var audioBlobs = [];
-                    var videoBlobs = [];
-
-                    // below line is optional
-                    // because we already set "video.width"
-                    // and "video.height"....5 lines above
-                    //multiStreamRecorder.canvas = {
-                    //    width: video.width,
-                    //    height: video.height
-                    //};
-
-                    //multiStreamRecorder.video = video;
-
-
-                    videoRecorder.canvas = {
-                        width: video.width,
-                        height: video.height
-                    };
-
-                    videoRecorder.video = video;
-
-                    //multiStreamRecorder.ondataavailable = function(blobs) {
-                    //    appendLink(blobs.audio);
-                    //    appendLink(blobs.video);
-                    //};
-
-
-                    audioRecorder.ondataavailable = function (blob) {
-                        audioBlobs.push(blob);
-
-                        if (audioBlobs.length == videoBlobs.length) {
-                            var audioBlob = audioBlobs[audioBlobs.length];
-                            var videoBlob = videoBlobs[videoBlobs.length];
-                            // do XHR here
-                            appendLink(audioBlob);
-                            appendLink(videoBlob);
-                        }
-
-                    };
-
-                    videoRecorder.ondataavailable = function (blob) {
-                        videoBlobs.push(blob);
-
-                        if (audioBlobs.length == videoBlobs.length) {
-                            var audioBlob = audioBlobs[audioBlobs.length];
-                            var videoBlob = videoBlobs[videoBlobs.length];
-                            // do XHR here
-                            appendLink(audioBlob);
-                            appendLink(videoBlob);
-                        }
-                    };
-
-                    audioRecorder.start(3000);
-                    videoRecorder.start(3000);
-
-                    function appendLink(blob) {
-                        var a = document.createElement('a');
-                        a.target = '_blank';
-                        a.innerHTML = 'Open Recorded ' + (blob.type == 'audio/ogg' ? 'Audio' : 'Video') + ' No. ' + (index++) + ' (Size: ' + bytesToSize(blob.size) + ') Time Length: ' + getTimeLength(timeInterval);
-
-                        a.href = URL.createObjectURL(blob);
-
-                        container.appendChild(a);
-                        container.appendChild(document.createElement('hr'));
-                    }
-
-                    var timeInterval = document.querySelector('#time-interval').value;
-                    if (timeInterval) timeInterval = parseInt(timeInterval);
-                    else timeInterval = 5 * 1000;
-
-                    // get blob after specific time interval
-                    multiStreamRecorder.start(timeInterval);
-
-                    document.querySelector('#stop-recording').disabled = false;
-                }, false);
-
-                video.play();
-
-                container.appendChild(video);
-                container.appendChild(document.createElement('hr'));
             }
-
-            // ---------------------- Temp Code 
-
-
         </script>
     </body>
 </html>

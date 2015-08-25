@@ -15,6 +15,9 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
     public class RecordRTCController : Controller
     {
         // ---/RecordRTC/
+
+        string path = AppDomain.CurrentDomain.BaseDirectory + "uploads/";
+
         public ActionResult Index()
         {
             return View();
@@ -30,21 +33,28 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
        [HttpPost]
         public ActionResult PostRecordedAudioVideo()
         {
-            var path = AppDomain.CurrentDomain.BaseDirectory + "uploads/";
-           string temp = Path.ChangeExtension(Request.Form[0], ".txt");
-            var logFile = Path.Combine(path, temp); //AppDomain.CurrentDomain.BaseDirectory + "uploads/log.txt";
+            
+            var folderPath = Path.Combine(path, Request.Form["mainFileName"]);
+
+            var chunkFileName = Path.Combine(folderPath, Request.Form["chunkFileName"]);
+            var mainFileName = Path.Combine(folderPath, Request.Form["mainFileName"]);
+
+            //string temp = Path.ChangeExtension(Request.Form["chunkFileName"], ".txt");
+
+            var logFile = Path.Combine(folderPath, mainFileName+"-log.txt"); //AppDomain.CurrentDomain.BaseDirectory + "uploads/log.txt";
+
+            CheckForDirectory(folderPath);
 
            WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Uploading ..."}, true);
             foreach (string upload in Request.Files)
             {
-                
                 var file = Request.Files[upload];
                 if (file == null) continue;
 
-                file.SaveAs(Path.Combine(path, Request.Form[0]));
-                var fileName = Path.Combine(path, Request.Form[0]);
+                file.SaveAs(chunkFileName);
                 
             }
+
             WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Some chunks uploaded ..."}, true);
             return Json(Request.Form[0]);
         }
@@ -65,19 +75,31 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
         [HttpPost]
         public ActionResult ConvertFile()
         {
+            var folderPath = Path.Combine(path + Request.Form["mainFileName"]+"/");
+            var audioFile = Path.Combine(folderPath+ Request.Form["audio-filename"]);
+            var videoFile = Path.Combine(folderPath + Request.Form["video-filename"]);
+            string mainFile = Request.Form["mainFileName"];
 
-            var audioFile = AppDomain.CurrentDomain.BaseDirectory + "uploads/" + Request.Form["audio-filename"];
-            var videoFile = AppDomain.CurrentDomain.BaseDirectory + "uploads/" + Request.Form["video-filename"];
             //var mp4File = Path.ChangeExtension(audioFile, ".webm");
             var temp = Path.GetFileNameWithoutExtension(videoFile);
-            var output = AppDomain.CurrentDomain.BaseDirectory + "uploads/" + temp+"v"+".webm";// Request.Form["video-filename"]
-            var logFile = AppDomain.CurrentDomain.BaseDirectory + "uploads/" + temp + ".txt";
+            var output =  Path.Combine(folderPath,temp+"v"+".webm");
+
+            var logFile =  Path.Combine(folderPath,temp, temp + ".txt");
             string outFile = "";
 
-            WriteLog(logFile,new Status { State = "inProgress", StatusCode = 2, StatusMessage = "File conversion started ..."}, true);
+           // WriteLog(logFile,new Status { State = "inProgress", StatusCode = 2, StatusMessage = "File conversion started ..."}, true);
 
             if (System.IO.File.Exists(audioFile) && System.IO.File.Exists(videoFile))
+            {
                 outFile = ConvertFile(audioFile, videoFile, output, logFile);
+
+                var tempOutFile =  AppDomain.CurrentDomain.BaseDirectory +"uploads\\"+ mainFile + "\\" + outFile;
+               // outFile = folderPath +"\\"+outFile;
+                string fileContent = String.Format("file \'{0}\' \n", tempOutFile);
+                var mergeFile = Path.Combine(folderPath, mainFile + ".txt");
+                System.IO.File.AppendAllText(mergeFile, fileContent);
+            }
+                
             return Json(outFile);
         }
 
@@ -125,6 +147,47 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
             {
                 return Json(s, JsonRequestBehavior.AllowGet);
             }
+        }
+
+        [HttpPost]
+        public JsonResult MergeChunkFiles(string mainFileName)
+        {
+            var folderPath = Path.Combine(path + mainFileName);
+            //var mergerTxtFile = Path.Combine(folderPath, mainFileName + ".txt");//folderPath + "/" + mainFileName + ".txt";
+
+            var mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "uploads\\" + mainFileName + "\\" + mainFileName + ".txt";
+            var outputFile = Path.Combine(folderPath, mainFileName + ".webm");
+
+            MergeChunkFiles(mergerTxtFile, outputFile);
+            return Json(outputFile);
+        }
+
+        private void MergeChunkFiles(string mergerTxtFile, string outputFile)
+        {
+            var exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Converter/ffmpeg.exe");
+
+            //ffmpeg -f concat -i f.txt -c copy Audio1.wav
+            var parameters = String.Format("-f concat -i {0} -c copy {1}", mergerTxtFile,outputFile);
+            bool isOwerWriteLog = true;
+
+            using (Process p = new Process())
+            {
+                p.StartInfo.UseShellExecute = false;
+                p.StartInfo.CreateNoWindow = true;
+                p.StartInfo.RedirectStandardOutput = true;
+                p.StartInfo.RedirectStandardError = true;
+                p.StartInfo.FileName = exePath;
+                p.StartInfo.Arguments = parameters;
+                p.Start();
+                StreamReader reader = p.StandardError;
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    System.IO.File.AppendAllText(mergerTxtFile+"123.txt",line);
+                }
+                p.WaitForExit();
+                //var result = p.StandardOutput.ReadToEnd();
+            } // Using
         }
 
 
@@ -224,6 +287,13 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
                 return false;
             }
             return true;
+        }
+
+        public static void CheckForDirectory(string dirPath)
+        {
+            if (!Directory.Exists(dirPath))
+                Directory.CreateDirectory(dirPath);
+
         }
     }
 }

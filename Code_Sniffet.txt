@@ -18,6 +18,9 @@ ffmpeg -i Audio1.wav -i Video1.webm AV1.webm
 
 
 
+E:\Projects\Demos\Experiments\WebRTC\RecordRTC-to-ASPNETMVC\RecordRTC_to_ASPNETMVC\uploads\1440535268489\1440535268489-0v.webm'
+
+
 
 
 #----------------------------------------------------------- 
@@ -97,3 +100,21 @@ function onMediaSuccess(stream) {
 function onMediaError(e) {
     console.error('media error', e);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------
+
