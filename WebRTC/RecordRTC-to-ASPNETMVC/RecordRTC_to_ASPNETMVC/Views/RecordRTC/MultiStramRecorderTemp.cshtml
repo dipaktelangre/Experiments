@@ -1,11 +1,4 @@
-﻿<!--
-> Muaz Khan     - https://github.com/muaz-khan
-> MIT License   - https://www.webrtc-experiment.com/licence/
-> Documentation - https://github.com/streamproc/MediaStreamRecorder
-> =================================================================
-> audio-recorder.html
--->
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
     <head>
         <title>MultiStreamRecorder.js & MediaStreamRecorder</title>
@@ -126,6 +119,8 @@
             var audioFileCounter = 0;
             var videoFileCounter = 0;
             var uploadedFileCounter = 0;
+            var audioUploadCounter = 0;
+            var videoUploadCounter = 0;
 
             var audioRecorder;
             var videoRecorder;
@@ -137,7 +132,6 @@
 
             /// On start success 
             function onMediaSuccess(stream) {
-                debugger;
                 var video = document.createElement('video');
 
                 video = mergeProps(video, {
@@ -184,7 +178,6 @@
                     //audioRecorder.ondataavailable = function(blob) {
                     var postAudio = function (blob) {
                         
-                        debugger;
                         __log("Audio available to upload");
                         var audioFileName = mainFileName + "-" + audioFileCounter + ".wav";
                         fileNameStored = mainFileName + "-" + audioFileCounter;
@@ -196,14 +189,19 @@
                         ++fileToUpload;
                         PostBlob(blob, "audio", audioFileName, mainFileName, function(data) {
                             ++uploadedFileCounter;
-
+                            
                             __log("Adudio uploaded : Uploaded file counter -> " + uploadedFileCounter);
 
                             console.log("Check for conversion");
                             --fileToUpload;
-                            if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter/2) )) {
+
+                            ++audioUploadCounter;
+
+                            //if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter/2) )) {
+                            if (audioUploadCounter == videoUploadCounter) {
                                 //console.log("Converting File ->" + fileName);
-                                ConvertToMp4(mainFileName + "-" + convertedFileCounter, mainFileName);
+                                var fileNameToconvert = mainFileName + "-" + (audioUploadCounter - 1);
+                                ConvertToMp4(fileNameToconvert, mainFileName);
                             }
                         });
 
@@ -212,7 +210,7 @@
                     //Video Available
                     // videoRecorder.ondataavailable = function(blob) {
                     var postVideo= function (blob) {
-                        debugger;
+                        
                         var videoFileName = mainFileName + "-" + videoFileCounter + ".webm";
                         __log("Video available to upload");
                         ++videoFileCounter;
@@ -230,10 +228,14 @@
                             __log("Check for conversion");
 
                             --fileToUpload;
-                            if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter / 2))) {
-                                //console.log("Converting File ->" + fileName);
-                                ConvertToMp4(mainFileName + "-" + convertedFileCounter, mainFileName);
+                            ++videoUploadCounter;
+                            //if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter / 2))) {
+
+                            if (audioUploadCounter == videoUploadCounter) {
+                                var fileNameToconvert = mainFileName + "-" + (audioUploadCounter - 1);
+                                ConvertToMp4(fileNameToconvert, mainFileName);
                             }
+                                
                         });
                     };
 
@@ -278,6 +280,9 @@
                 formData.append("audio" + '-filename', fileName + ".wav");
                 formData.append("video" + '-filename', fileName + ".webm");
                 formData.append("mainFileName", mainFileName);
+                formData.append("convertCounter", convertedFileCounter);
+                formData.append("fileType", "Video");
+
                 var fileType = "video";
 
                 // Check for status of server 
@@ -308,7 +313,7 @@
                 var option = {
                     url: "/RecordRTC/MergeChunkFiles",
                     type: "POST",
-                    data : {mainFileName : mainFileName}
+                    data : {mainFileName : mainFileName, fileType : "Video"}
                 };
 
                 $.ajax(option).done(function (data) {
@@ -342,7 +347,6 @@
             var container = document.getElementById('container');
             var index = 1;
             
-            // below function via: http://goo.gl/B3ae8c
             function bytesToSize(bytes) {
                var k = 1000;
                var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -351,7 +355,6 @@
                return (bytes / Math.pow(k, i)).toPrecision(3) + ' ' + sizes[i];
             }
             
-            // below function via: http://goo.gl/6QNDcI
             function getTimeLength(milliseconds) {
                 var data = new Date(milliseconds);
                 return data.getUTCHours()+" hours, "+data.getUTCMinutes()+" minutes and "+data.getUTCSeconds()+" second(s)";
@@ -373,6 +376,7 @@
                 formData.append(fileType + '-blob', blob);
                 formData.append("chunkFileName", fileName);
                 formData.append("mainFileName", mainFileName);
+                formData.append("fileType", "Video");
                 //++activeAjaxConnections;
                 var option = {
                     type: 'POST',

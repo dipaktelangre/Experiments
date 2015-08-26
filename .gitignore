@@ -194,3 +194,4 @@ FakesAssemblies/
 
 WebRTC/AudioRecorder/AudioRecorder-RecordJs/AudioRecorder/Files/*
 WebRTC/RecordRTC-to-ASPNETMVC/RecordRTC_to_ASPNETMVC/uploads/*
+WebRTC/RecordRTC-to-ASPNETMVC/Backup/*

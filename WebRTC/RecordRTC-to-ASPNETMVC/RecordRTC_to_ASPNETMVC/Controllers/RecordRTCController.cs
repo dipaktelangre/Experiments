@@ -18,6 +18,9 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
 
         string path = AppDomain.CurrentDomain.BaseDirectory + "uploads/";
 
+        string audioFilesPath = AppDomain.CurrentDomain.BaseDirectory + "uploads/Audio/";
+        string videoFilesPath = AppDomain.CurrentDomain.BaseDirectory + "uploads/Video/";
+
         public ActionResult Index()
         {
             return View();
@@ -38,9 +41,18 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
         // ---/RecordRTC/PostRecordedAudioVideo
        [HttpPost]
         public ActionResult PostRecordedAudioVideo()
-        {
-            
-            var folderPath = Path.Combine(path, Request.Form["mainFileName"]);
+       {
+           string fileType = Request.Form["fileType"]; 
+           var folderPath = Path.Combine(path, Request.Form["mainFileName"]);
+           if (fileType == "Video")
+           {
+               folderPath = Path.Combine(videoFilesPath, Request.Form["mainFileName"]);
+           }
+
+           if (fileType == "Audio")
+           {
+               folderPath = Path.Combine(audioFilesPath, Request.Form["mainFileName"]);
+           }
 
             var chunkFileName = Path.Combine(folderPath, Request.Form["chunkFileName"]);
             var mainFileName = Path.Combine(folderPath, Request.Form["mainFileName"]);
@@ -51,7 +63,7 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
 
             CheckForDirectory(folderPath);
 
-           WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Uploading ..."}, true);
+          // WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Uploading ..."}, true);
             foreach (string upload in Request.Files)
             {
                 var file = Request.Files[upload];
@@ -61,7 +73,7 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
                 
             }
 
-            WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Some chunks uploaded ..."}, true);
+            //WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Some chunks uploaded ..."}, true);
             return Json(Request.Form[0]);
         }
 
@@ -81,9 +93,10 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
         [HttpPost]
         public ActionResult ConvertFile()
         {
-            var folderPath = Path.Combine(path + Request.Form["mainFileName"]+"/");
+            var folderPath = Path.Combine(videoFilesPath + Request.Form["mainFileName"]+"/");
             var audioFile = Path.Combine(folderPath+ Request.Form["audio-filename"]);
             var videoFile = Path.Combine(folderPath + Request.Form["video-filename"]);
+            var convertCounter = Convert.ToInt16(Request.Form["convertCounter"]);
             string mainFile = Request.Form["mainFileName"];
 
             //var mp4File = Path.ChangeExtension(audioFile, ".webm");
@@ -109,14 +122,17 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
 
                 outFile = ConvertFile(audioFile, videoFile, output, logFileConversion);
 
-                var tempOutFile =  AppDomain.CurrentDomain.BaseDirectory +"uploads\\"+ mainFile + "\\" + outFile;
+                var tempOutFile =  AppDomain.CurrentDomain.BaseDirectory +"uploads\\Video\\"+ mainFile + "\\" + outFile;
                // outFile = folderPath +"\\"+outFile;
                 string fileContent = String.Format("file \'{0}\' \n", tempOutFile);
                 var mergeFile = Path.Combine(folderPath, mainFile + ".txt");
                 System.IO.File.AppendAllText(mergeFile, fileContent);
+                convertCounter++;
+
+                return Json(new { counter = convertCounter, converted = true, fileName = outFile,message = "done" });
             }
-                
-            return Json(outFile);
+
+            return Json(new { counter = convertCounter, converted = false, fileName = outFile, message="file not arrieved yet" });
         }
 
         // 
@@ -168,14 +184,30 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
         [HttpPost]
         public JsonResult MergeChunkFiles(string mainFileName)
         {
-            var folderPath = Path.Combine(path + mainFileName);
+            var fileType = Request.Form["fileType"];
+            var mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "uploads\\" + mainFileName + "\\" + mainFileName + ".txt";
+            var folderPath = Path.Combine(videoFilesPath + mainFileName);
+            var outputFile = Path.Combine(folderPath, mainFileName + ".webm");
+            if (fileType == "Video")
+            {
+                folderPath = Path.Combine(videoFilesPath + mainFileName);
+                mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "uploads\\Video\\" + mainFileName + "\\" + mainFileName + ".txt";
+                outputFile = Path.Combine(folderPath, mainFileName + ".webm");
+            }
+            if (fileType == "Audio")
+            {
+                folderPath = Path.Combine(audioFilesPath + mainFileName);
+                mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "uploads\\Audio" + mainFileName + "\\" + mainFileName + ".txt";
+                outputFile = Path.Combine(folderPath, mainFileName + ".wav");
+                MergeChunkFiles(mergerTxtFile, outputFile);
+                return Json("Video/"+mainFileName + "/" + mainFileName + ".wav");
+            }
+
             //var mergerTxtFile = Path.Combine(folderPath, mainFileName + ".txt");//folderPath + "/" + mainFileName + ".txt";
 
-            var mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "uploads\\" + mainFileName + "\\" + mainFileName + ".txt";
-            var outputFile = Path.Combine(folderPath, mainFileName + ".webm");
-
             MergeChunkFiles(mergerTxtFile, outputFile);
-            return Json(mainFileName+"/"+mainFileName+".webm");
+            return Json("Video/" + mainFileName + "/" + mainFileName + ".webm");
+            
         }
 
         private void MergeChunkFiles(string mergerTxtFile, string outputFile)
@@ -312,22 +344,22 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
         }
 
 
-        public static bool WriteLog(string path, Status content, bool isOverWrite)
-        {
-            var json = new JavaScriptSerializer().Serialize(content);
-            try
-            {
-                if (isOverWrite)
-                    System.IO.File.WriteAllText(path, json);
-                else
-                    System.IO.File.AppendAllText(path, json + "\n");
-            }
-            catch (Exception e)
-            {
-                return false;
-            }
-            return true;
-        }
+        //public static bool WriteLog(string path, Status content, bool isOverWrite)
+        //{
+        //    var json = new JavaScriptSerializer().Serialize(content);
+        //    try
+        //    {
+        //        if (isOverWrite)
+        //            System.IO.File.WriteAllText(path, json);
+        //        else
+        //            System.IO.File.AppendAllText(path, json + "\n");
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        return false;
+        //    }
+        //    return true;
+        //}
 
         public static void CheckForDirectory(string dirPath)
         {
