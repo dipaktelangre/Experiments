@@ -99,6 +99,7 @@
     <Content Include="Views\RecordRTC\Index.cshtml" />
     <None Include="uploads\README.md" />
     <Content Include="Views\RecordRTC\MultiStramRecorder.cshtml" />
+    <Content Include="Views\RecordRTC\MultiStramRecorderTemp.cshtml" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

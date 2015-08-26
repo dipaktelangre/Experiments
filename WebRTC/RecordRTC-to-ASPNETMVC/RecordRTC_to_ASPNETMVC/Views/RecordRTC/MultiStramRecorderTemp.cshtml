@@ -75,28 +75,35 @@
                 this.disabled = true;
                 document.querySelector('#start-recording').disabled = false;
 
-                //multiStreamRecorder.stop();
+                this.disabled = true;
+                multiStreamRecorder.stop();
 
-                if (audioRecorder.stream)
-                    audioRecorder.stream.stop();
-                if (videoRecorder.stream)
-                    videoRecorder.stream.stop();
+                if (multiStreamRecorder.stream) {
+                    multiStreamRecorder.stream.stop();
+                }
+
+                //if (audioRecorder.stream)
+                //    audioRecorder.stream.stop();
+                //if (videoRecorder.stream)
+                //    videoRecorder.stream.stop();
 
 
-                audioRecorder.stop();
-                videoRecorder.stop();
+                //audioRecorder.stop();
+                //videoRecorder.stop();
 
                 recordingStopped = true;
                 __log("Recording stopped " + recordingStopped);
-               // mergeChunkFiles(mainFileName);
 
+
+                // mergeChunkFiles(mainFileName);
+                //Wait until all files uploaded and converted 
                 var checkFileUploadStatues = setInterval(function () {
                     debugger;
                     __log("Checking for remaining conversion of file");
                     __log("Uploadcounter ->" + uploadedFileCounter);
                     __log("ConvertedFileCounter ->" + convertedFileCounter);
                     
-                    if (convertedFileCounter == (uploadedFileCounter / 2)) {
+                    if (convertedFileCounter == parseInt(uploadedFileCounter / 2)) {
                         clearInterval(checkFileUploadStatues);
 
                         __log("trying to merge file ");
@@ -130,7 +137,7 @@
 
             /// On start success 
             function onMediaSuccess(stream) {
-
+                debugger;
                 var video = document.createElement('video');
 
                 video = mergeProps(video, {
@@ -141,22 +148,44 @@
                  mainFileName = new Date().getTime();
 
                 video.addEventListener('loadedmetadata', function() {
-                    audioRecorder = new MediaStreamRecorder(stream);
-                    videoRecorder = new MediaStreamRecorder(stream);
-                    audioRecorder.mimeType = 'audio/wav';
-                    videoRecorder.mimeType = 'video/webm';
+                    //audioRecorder = new MediaStreamRecorder(stream);
+                    //videoRecorder = new MediaStreamRecorder(stream);
+                    //audioRecorder.mimeType = 'audio/wav';
+                    //videoRecorder.mimeType = 'video/webm';
 
                     var audioBlobs = [];
                     var videoBlobs = [];
 
-                    videoRecorder.video = video;
+                    //videoRecorder.video = video;
+
                     __log("Recorder Initialized");
 
-                    audioRecorder.ondataavailable = function(blob) {
-                        //appendLink(blob);
-                        //debugger;
+
+
+                    multiStreamRecorder = new MultiStreamRecorder(stream);
+
+                    // below line is optional
+                    // because we already set "video.width"
+                    // and "video.height"....5 lines above
+                    multiStreamRecorder.canvas = {
+                        width: video.width,
+                        height: video.height
+                    };
+
+                    multiStreamRecorder.video = video;
+
+                    multiStreamRecorder.ondataavailable = function (blobs) {
+                        //appendLink(blobs.audio);
+                        //appendLink(blobs.video);
+                        postAudio(blobs.audio);
+                        postVideo(blobs.video);
+                    };
+
+                    //audioRecorder.ondataavailable = function(blob) {
+                    var postAudio = function (blob) {
+                        
+                        debugger;
                         __log("Audio available to upload");
-                        ++fileToUpload;
                         var audioFileName = mainFileName + "-" + audioFileCounter + ".wav";
                         fileNameStored = mainFileName + "-" + audioFileCounter;
                         ++audioFileCounter;
@@ -164,55 +193,56 @@
 
                         //PostBlob(blob, "audio", audioFileName, mainFileName, audioUploadCallback);
 
+                        ++fileToUpload;
                         PostBlob(blob, "audio", audioFileName, mainFileName, function(data) {
-                            --fileToUpload;
                             ++uploadedFileCounter;
 
                             __log("Adudio uploaded : Uploaded file counter -> " + uploadedFileCounter);
 
                             console.log("Check for conversion");
-                            if (fileToUpload <= 0 && (convertedFileCounter <= audioFileCounter)) {
-                                var temp = mainFileName + "-" + convertedFileCounter;
-                                console.log("Conversion initialized for  -> " + temp);
-                                ConvertToMp4(temp, mainFileName);
+                            --fileToUpload;
+                            if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter/2) )) {
+                                //console.log("Converting File ->" + fileName);
+                                ConvertToMp4(mainFileName + "-" + convertedFileCounter, mainFileName);
                             }
                         });
 
                     };
 
                     //Video Available
-                    videoRecorder.ondataavailable = function(blob) {
-                        //appendLink(blob);
-
-                        ++fileToUpload;
+                    // videoRecorder.ondataavailable = function(blob) {
+                    var postVideo= function (blob) {
+                        debugger;
                         var videoFileName = mainFileName + "-" + videoFileCounter + ".webm";
                         __log("Video available to upload");
                         ++videoFileCounter;
 
                         __log("Video counter ->" + videoFileCounter);
                         //PostBlob(blob, "video", videoFileName, mainFileName,videoUploadCallback);
+
+                        ++fileToUpload;
                         PostBlob(blob, "video", videoFileName, mainFileName, function(data) {
                             var temp = mainFileName + "-" + convertedFileCounter;
-                            --fileToUpload;
+                            
                             ++uploadedFileCounter;
 
                             __log("Video uploaded : Uploaded file counter -> " + uploadedFileCounter);
                             __log("Check for conversion");
 
-                            if (fileToUpload <= 0 && (convertedFileCounter <= videoFileCounter)) {
+                            --fileToUpload;
+                            if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter / 2))) {
                                 //console.log("Converting File ->" + fileName);
-                                ConvertToMp4(temp, mainFileName);
+                                ConvertToMp4(mainFileName + "-" + convertedFileCounter, mainFileName);
                             }
                         });
                     };
 
-                    //var timeInterval = document.querySelector('#time-interval').value;
-                    //if (timeInterval)
-                    //        timeInterval = parseInt(timeInterval);
-                    //else timeInterval = 30 * 1000;
-                    timeInterval = 10 * 1000;
-                    audioRecorder.start(timeInterval);
-                    videoRecorder.start(timeInterval);
+                    var timeInterval = document.querySelector('#time-interval').value;
+                    if (timeInterval)
+                            timeInterval = parseInt(timeInterval);
+                    else timeInterval = 30 * 1000;
+
+                    multiStreamRecorder.start(timeInterval);
 
                 });
 
@@ -223,26 +253,27 @@
             }
             // On start success 
 
-            var audioUploadCallback = function audioUploaded(mainFileName) {
-                --fileToUpload;
-                if (fileToUpload <= 0 && (convertedFileCounter <= audioFileCounter)) {
-                    //console.log("Converting File ->" + fileName);
-                    ConvertToMp4(mainFileName + "-" + convertedFileCounter);
-                }
+            //var audioUploadCallback = function audioUploaded(mainFileName) {
+            //    --fileToUpload;
+            //    if (fileToUpload <= 0 && (convertedFileCounter <= audioFileCounter)) {
+            //        //console.log("Converting File ->" + fileName);
+            //        ConvertToMp4(mainFileName + "-" + convertedFileCounter);
+            //    }
 
-            };
+            //};
 
-            var videoUploadCallback = function(mainFileName) {
-                --fileToUpload;
-                if (fileToUpload <= 0 && (convertedFileCounter <= videoFileCounter)) {
-                    //console.log("Converting File ->" + fileName);
-                    ConvertToMp4(mainFileName + "-" + convertedFileCounter);
-                }
-            };
+            //var videoUploadCallback = function(mainFileName) {
+            //    --fileToUpload;
+            //    if (fileToUpload <= 0 && (convertedFileCounter <= videoFileCounter)) {
+            //        //console.log("Converting File ->" + fileName);
+            //        ConvertToMp4(mainFileName + "-" + convertedFileCounter);
+            //    }
+            //};
 
 
             function ConvertToMp4(fileName, mainFileName) {
                 // FormData
+                debugger;
                 var formData = new FormData();
                 formData.append("audio" + '-filename', fileName + ".wav");
                 formData.append("video" + '-filename', fileName + ".webm");
@@ -261,24 +292,11 @@
                         processData: false,
                         contentType: false
                     }).done(function(data) {
-
+                        
                         ++convertedFileCounter;
                         __log("File converted ->" + fileName);
-                        __log("Convetred File counter -> " + convertedFileCounter);
-                        //container.appendChild(document.createElement('hr'));
-                        //var mediaElement = document.createElement(fileType);
-
-                        //var source = document.createElement('source');
-                        //source.src = location.href + 'uploads/' + data.replace(/"/g, '');
-
-                        //if (fileType == 'video') source.type = 'video/webm; codecs="vp8, vorbis"';
-                        //if (fileType == 'audio') source.type = !!navigator.mozGetUserMedia ? 'audio/ogg' : 'audio/wav';
-
-                        //mediaElement.appendChild(source);
-
-                        //mediaElement.controls = true;
-                        //container.appendChild(mediaElement);
-                        //mediaElement.play();
+                        __log("-------------Convetred File counter -> " + convertedFileCounter);
+                        
                     })
                     .error(function () {
 
@@ -296,6 +314,8 @@
                 $.ajax(option).done(function (data) {
                     __log("File merged ->" + data);
                     var video = document.createElement("video");
+                    video.width = resolution_x;
+                    video.height = resolution_y;
                     video.src = "/uploads/" + data;
                     video.controls = true;
                     container.appendChild(video);

@@ -193,3 +193,4 @@ FakesAssemblies/
 *.orig
 
 WebRTC/AudioRecorder/AudioRecorder-RecordJs/AudioRecorder/Files/*
+WebRTC/RecordRTC-to-ASPNETMVC/RecordRTC_to_ASPNETMVC/uploads/*

@@ -29,6 +29,12 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
             return View();
         }
 
+        public ActionResult MultiStramRecorderTemp()
+        {
+            return View();
+        }
+
+
         // ---/RecordRTC/PostRecordedAudioVideo
        [HttpPost]
         public ActionResult PostRecordedAudioVideo()
@@ -85,13 +91,23 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
             var output =  Path.Combine(folderPath,temp+"v"+".webm");
 
             var logFile =  Path.Combine(folderPath,temp, temp + ".txt");
+            var logFileConversion = Path.Combine(folderPath, mainFile + "-con-log.txt");
+
+            WriteLog(logFileConversion, "+++++++++++++++++++++++++++ Request for conversion ++++++++++++");
+            WriteLog(logFileConversion, "Audio File -> " + Request.Form["audio-filename"] + "Video File ->" + Request.Form["video-filename"]);
+
+
             string outFile = "";
 
            // WriteLog(logFile,new Status { State = "inProgress", StatusCode = 2, StatusMessage = "File conversion started ..."}, true);
 
             if (System.IO.File.Exists(audioFile) && System.IO.File.Exists(videoFile))
             {
-                outFile = ConvertFile(audioFile, videoFile, output, logFile);
+                WriteLog(logFileConversion,
+                    "---------------------------------------------File Found : Convert it !--------------------------------");
+                WriteLog(logFileConversion, "FileName : " + audioFile + " " + videoFile);
+
+                outFile = ConvertFile(audioFile, videoFile, output, logFileConversion);
 
                 var tempOutFile =  AppDomain.CurrentDomain.BaseDirectory +"uploads\\"+ mainFile + "\\" + outFile;
                // outFile = folderPath +"\\"+outFile;
@@ -159,7 +175,7 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
             var outputFile = Path.Combine(folderPath, mainFileName + ".webm");
 
             MergeChunkFiles(mergerTxtFile, outputFile);
-            return Json(outputFile);
+            return Json(mainFileName+"/"+mainFileName+".webm");
         }
 
         private void MergeChunkFiles(string mergerTxtFile, string outputFile)
@@ -183,7 +199,7 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
                 string line;
                 while ((line = reader.ReadLine()) != null)
                 {
-                    System.IO.File.AppendAllText(mergerTxtFile+"123.txt",line);
+                    System.IO.File.AppendAllText(mergerTxtFile+"-merge-log.txt",line);
                 }
                 p.WaitForExit();
                 //var result = p.StandardOutput.ReadToEnd();
@@ -197,6 +213,9 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
             var parameters = String.Format(" -i {0} -i {1} {2}", wavFile, webmFile, mp4File);
             bool isOwerWriteLog = true;
 
+            WriteLog(logFile, "-----------Init-------------");
+
+            WriteLog(logFile, "Parameters ->" + parameters);
             using (Process p = new Process())
             {
                 p.StartInfo.UseShellExecute = false;
@@ -205,6 +224,12 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
                 p.StartInfo.RedirectStandardError = true;
                 p.StartInfo.FileName = exePath;
                 p.StartInfo.Arguments = parameters;
+
+                WriteLog(logFile, "-----------Starting convrsion -------- ");
+
+                WriteLog(logFile, "Audio file  " + wavFile);
+                WriteLog(logFile, "Video File" + webmFile);
+
                 p.Start();
                 
 
@@ -216,7 +241,7 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
                     decimal totalDuration = 0.0m;
                     decimal currentDuration = 0.0m;
                     decimal percentage = 0.0m;
-                    WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Initializing converter ..." }, isOwerWriteLog);
+                   // WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Initializing converter ..." }, isOwerWriteLog);
                     while ((line = reader.ReadLine()) != null)
                     {
                         //Get total Duration 
@@ -251,11 +276,12 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
                             percentage = currentDuration / totalDuration * 100;
                             string msg = String.Format("Progress : {0} %", percentage.ToString("F"));
 
-                            WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = msg}, isOwerWriteLog);
+                            WriteLog(logFile, msg);
+                           // WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = msg}, isOwerWriteLog);
                         }
                     } // While line
 
-                    WriteLog(logFile, new Status { State = "completed", StatusCode = 4, StatusMessage = "Done !" }, isOwerWriteLog);
+                    //WriteLog(logFile, new Status { State = "completed", StatusCode = 4, StatusMessage = "Done !" }, isOwerWriteLog);
 
                 #endregion
 
@@ -267,8 +293,22 @@ namespace RecordRTC_to_ASPNETMVC.Controllers
             //new FileInfo(wavFile).Delete();
             //new FileInfo(webmFile).Delete();
 
+            WriteLog(logFile, "---------------- Completed ---------- File : " + mp4File);
             return Path.GetFileName(mp4File);
 
+        }
+
+
+
+
+        public static bool WriteLog(string path, string content, bool isOverWrite = false)
+        {
+                if (isOverWrite)
+                    System.IO.File.WriteAllText(path, content);
+                else
+                    System.IO.File.AppendAllText(path, content + "\n");
+            
+            return true;
         }
 
 
