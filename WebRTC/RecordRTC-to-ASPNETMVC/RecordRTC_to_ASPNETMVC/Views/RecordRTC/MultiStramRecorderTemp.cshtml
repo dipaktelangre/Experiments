@@ -3,9 +3,6 @@
     <head>
         <title>MultiStreamRecorder.js & MediaStreamRecorder</title>
 
-        
-        @*<script src="https://cdn.webrtc-experiment.com/MediaStreamRecorder.js"></script>*@
-
         <script src="../../Scripts/jquery.min.js"></script>
         <script src="../../Scripts/MediaStreamRecorder.js"></script>
         <style>
@@ -197,10 +194,9 @@
 
                             ++audioUploadCounter;
 
-                            //if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter/2) )) {
-                            if (audioUploadCounter == videoUploadCounter) {
-                                //console.log("Converting File ->" + fileName);
-                                var fileNameToconvert = mainFileName + "-" + (audioUploadCounter - 1);
+                            if ((convertedFileCounter < audioUploadCounter) && (convertedFileCounter < videoUploadCounter)) {
+                                // var fileNameToconvert = mainFileName + "-" + (audioUploadCounter - 1);
+                                var fileNameToconvert = mainFileName + "-" + convertedFileCounter;
                                 ConvertToMp4(fileNameToconvert, mainFileName);
                             }
                         });

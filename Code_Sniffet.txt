@@ -111,7 +111,7 @@ function onMediaError(e) {
 
 
 
-
+ffmpeg -f concat -i C:\Sites\can-sit1.kaams.com\UserData\Artefact\Video\1440676507409\1440676507409.txt -c copy 1440676507409.webm
 
 
 
