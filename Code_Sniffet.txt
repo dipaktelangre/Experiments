@@ -26,6 +26,24 @@ E:\Projects\Demos\Experiments\WebRTC\RecordRTC-to-ASPNETMVC\RecordRTC_to_ASPNETM
 #----------------------------------------------------------- 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 var mediaConstraints = {
     audio: true,
     video: true
@@ -117,4 +135,1599 @@ ffmpeg -f concat -i C:\Sites\can-sit1.kaams.com\UserData\Artefact\Video\14406765
 
 
 --------------------------------
+
+
+
+
+
+
+
+
+
+----------------- Create Artfact --------------
+
+
+<%@ Control Language="C#" Inherits="System.Web.Mvc.ViewUserControl" %>
+<%--<link href="../../Theme/<%=  System.Configuration.ConfigurationManager.AppSettings["theme"].ToString() %>/css/jquery-ui.css"
+    rel="stylesheet" type="text/css" />--%>
+<script src="../../Scripts/jquery-1.10.2.min.js" type="text/javascript"></script>
+<script src="../../Scripts/jquery1-ui.js" type="text/javascript"></script>
+<script src="../../Scripts/ValidationLink.js" type="text/javascript"></script>
+<script src="../../Scripts/Utility.js" type="text/javascript"></script>
+<script src="../../Scripts/AudioRecorder/recorder.js" type="text/javascript"></script>
+<script src="../../Scripts/AudioRecorder/MediaStreamRecorder.js" type="text/javascript"></script>
+<%--Uncomment this --%>
+<%--<script src="../../Scripts/AudioRecorder/audioRecorder.js" type="text/javascript"></script>--%>
+<%--<script src="../../Scripts/Artefact/jquery-2.1.3.js" type="text/javascript"></script>--%>
+
+<script id="WebcamRecorderScript" type="text/javascript">
+
+    //You MUST need to provide exact static URL here
+
+    //Disable audio
+    //$("#divAudioRecord").hide();
+
+//    var serverName = window.location.host; ;
+//    var workerPath = 'http://' + serverName + '/Scripts/Artefact/ffmpeg_asm.js';
+
+//    var outputVideoBlob;
+//    var recordVideo, recordAudio;
+//    var videoPreview = document.getElementById('video-preview');
+//    var inner = document.querySelector('#webcamRecorder');
+//    var videoFile = !!navigator.mozGetUserMedia ? 'video.gif' : 'video.webm';
+//    var fileName;
+//    var fileNameStored;
+//    // if you want to record only audio on chrome
+//    // then simply set "isFirefox=true"
+//    var isFirefox = !!navigator.mozGetUserMedia;
+//    var fileToUpload = 2;
+
+
+    /// Hide Audio temporary 
+
+    $("#divAudioRecord").hide();
+    var resolution_x = 400;
+    var resolution_y = 288;
+
+    var mediaConstraints = {
+        audio: true,
+        video: {
+            mandatory: {
+                maxWidth: resolution_x,
+                maxHeight: resolution_y,
+                //minFrameRate: 3,
+                //maxFrameRate: 64,
+                //minAspectRatio: 1.77
+            }
+        }
+    };
+    var multiStreamRecorder;
+
+    //var audioVideoBlobs = {};
+    //var recordingInterval = 0;
+
+    //var fileToUpload = 0;
+    var convertedFileCounter = 0;
+    var audioFileCounter = 0;
+    var videoFileCounter = 0;
+    var uploadedFileCounter = 0;
+    var audioUploadCounter = 0;
+    var videoUploadCounter = 0;
+
+    var audioRecorder;
+    var videoRecorder;
+    var fileNameStored;
+    var recordingStopped = false;
+    var mainFileName;
+
+    var timeInterval = 5000;
+
+    //---------------
+
+    var backupStore = [];
+    var audioUploaded = [];
+    var videoUploaded = [];
+    var fileUploading = [];
+    var fileUploadFailed = [];
+    var fileInConversion = [];
+    var fileConverted = [];
+
+    // Start Video Recording 
+    document.querySelector('#record-video').onclick = function () {
+        this.disabled = true;
+        showStatus("Initializing ...");
+        navigator.getUserMedia(mediaConstraints, onMediaSuccess, onMediaError);
+
+    };
+
+
+    //Stop Video Recording
+    document.querySelector('#stop-recording-video').onclick = function () {
+        this.disabled = true;
+        document.querySelector('#record-video').disabled = false;
+
+        this.disabled = true;
+        multiStreamRecorder.stop();
+
+        if (multiStreamRecorder.stream) {
+            multiStreamRecorder.stream.stop();
+        }
+
+        recordingStopped = true;
+        __log("Recording stopped " + recordingStopped);
+
+        showStatus("Please wait. Uploading ....");
+
+        // mergeChunkFiles(mainFileName);
+        //Wait until all files uploaded and converted 
+        var checkFileUploadStatues = setInterval(function () {
+            //debugger;
+            __log("Checking for remaining conversion of file");
+            __log("Uploadcounter ->" + uploadedFileCounter);
+            __log("ConvertedFileCounter ->" + convertedFileCounter);
+
+           // if (convertedFileCounter == parseInt(uploadedFileCounter / 2)) {
+            //debugger;
+           if(fileUploading.length == 0 && fileInConversion.length ==0)
+           {
+                clearInterval(checkFileUploadStatues);
+
+                __log("trying to merge file ");
+                mergeChunkFiles(mainFileName);
+            }
+        }, 2000);
+
+    }; //Stop clicked
+
+    function onMediaSuccess(stream) {
+        var video = document.createElement('video');
+
+        video = mergeProps(video, {
+            controls: true,
+            src: URL.createObjectURL(stream)
+        });
+
+        mainFileName = new Date().getTime();
+
+        video.addEventListener('loadedmetadata', function () {
+            var audioBlobs = [];
+            var videoBlobs = [];
+
+            //videoRecorder.video = video;
+
+            __log("Recorder Initialized");
+
+
+
+            multiStreamRecorder = new MultiStreamRecorder(stream);
+
+            // below line is optional
+            // because we already set "video.width"
+            // and "video.height"....5 lines above
+            multiStreamRecorder.canvas = {
+                width: video.width,
+                height: video.height
+            };
+
+            multiStreamRecorder.video = video;
+
+            multiStreamRecorder.ondataavailable = function (blobs) {
+                postAudio(blobs.audio);
+                postVideo(blobs.video);
+            };
+            
+            //audioRecorder.ondataavailable = function(blob) {
+            var postAudio = function (blob) {
+
+                __log("Audio available to upload");
+
+                //debugger;
+                var audioFileName = mainFileName + "-" + audioFileCounter + ".wav";
+                fileNameStored = mainFileName + "-" + audioFileCounter;
+                
+
+                //PostBlob(blob, "audio", audioFileName, mainFileName, audioUploadCallback);
+
+                
+                //store 
+                //var tempFileNameNoExt = mainFileName + "-" + audioFileCounter;
+//                var tempObj = { name: audioFileName, type: "audio", blob: blob };
+//                backupStore.push(tempObj);
+                //Release me 
+                //tempObj = null;
+                //tempFileNameNoExt = null;
+
+                ++audioFileCounter;
+                
+                __log("Auido counter ->" + audioFileCounter);
+
+                PostBlob(blob, "audio", audioFileName, mainFileName, function (data) {
+                    ++uploadedFileCounter;
+                    //debugger;
+                    __log("Adudio uploaded : Uploaded file counter -> " + uploadedFileCounter);
+
+                    console.log("Check for conversion");
+                  
+
+                    ++audioUploadCounter;
+
+                    // Uplode complete : check for conversion 
+                     var tempFileNameNoExt= data.fileName.replace(/\.[^/.]+$/, "");
+                    audioUploaded.push(tempFileNameNoExt);
+                    checkForConversion();   
+
+
+                    //if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter/2) )) {
+//                    if (audioUploadCounter == videoUploadCounter) {
+//                    if ((convertedFileCounter< audioUploadCounter) && (convertedFileCounter < videoUploadCounter))
+//                    {
+//                        //console.log("Converting File ->" + fileName);
+//                        var fileNameToconvert = mainFileName + "-" + convertedFileCounter;
+//                        ConvertToMp4(fileNameToconvert, mainFileName);
+//                    }
+                });
+
+            };
+
+            //Video Available
+            // videoRecorder.ondataavailable = function(blob) {
+            var postVideo = function (blob) {
+
+                var videoFileName = mainFileName + "-" + videoFileCounter + ".webm";
+                __log("Video available to upload");
+
+                //debugger;
+                //PostBlob(blob, "video", videoFileName, mainFileName,videoUploadCallback);
+
+               // var tempFileNameNoExt = mainFileName + "-" + videoFileCounter;
+//                var tempObj = { name: videoFileName, type: "video", blob: blob };
+//                backupStore.push(tempObj);
+
+                ++videoFileCounter;
+
+                 __log("Video counter ->" + videoFileCounter);
+                //---------
+                PostBlob(blob, "video", videoFileName, mainFileName, function (data) {
+                    //debugger;
+                    __log("Video uploaded : Uploaded file counter -> " + uploadedFileCounter);
+
+                    // Uplode complete : check for conversion 
+                    __log("Check for conversion");
+
+                    var tempFileNameNoExt= data.fileName.replace(/\.[^/.]+$/, "");
+                    videoUploaded.push(tempFileNameNoExt);
+                    checkForConversion();   
+
+
+                    ++uploadedFileCounter;
+                    ++videoUploadCounter;
+
+
+                    //if (fileToUpload <= 0 && (convertedFileCounter <= parseInt(uploadedFileCounter / 2))) {
+
+//                    if ((convertedFileCounter< audioUploadCounter) && (convertedFileCounter < videoUploadCounter)) {
+//                       // var fileNameToconvert = mainFileName + "-" + (audioUploadCounter - 1);
+//                       var fileNameToconvert = mainFileName + "-" + convertedFileCounter;
+//                        ConvertToMp4(fileNameToconvert, mainFileName);
+//                    }
+
+                });
+            };
+
+            //document.querySelector('#time-interval').value;
+            if (timeInterval)
+                timeInterval = parseInt(timeInterval);
+            else timeInterval = 30 * 1000;
+
+            multiStreamRecorder.start(timeInterval);
+
+        });
+
+        video.setAttribute("id", "video-preview");
+        video.play();
+        showStatus("Recording...");
+        document.querySelector('#stop-recording-video').disabled = false;
+        $("#video-preview").replaceWith(video);
+    } // MediaSuccess
+
+
+    // --------------- Common Function -----------
+
+    //Scan through audioUploded and videoUploaded if any match name found then send to convert
+    function checkForConversion() {
+       // take audioUploded and sersh in videoUploded
+
+        $.each(audioUploaded, function(index, value) {
+           var found =  $.inArray(value, videoUploaded);
+
+           if (found != -1 && videoUploaded[found] != null) {
+               debugger;
+               __log("file found for conversion " + videoUploaded[found]);
+
+               ConvertToMp4(videoUploaded[found], mainFileName);
+               //remove it 
+               videoUploaded.splice(found, 1);
+               audioUploaded.splice(index, 1);
+
+               return false;
+           } else {
+               __log("Not ready for conversion.. Try with next upload");
+           }
+        });
+    }
+
+    function ConvertToMp4(fileName, mainFileName) {
+        // FormData
+        debugger;
+        var formData = new FormData();
+        formData.append("audio" + '-filename', fileName + ".wav");
+        formData.append("video" + '-filename', fileName + ".webm");
+        formData.append("mainFileName", mainFileName);
+        formData.append("convertCounter", convertedFileCounter);
+        formData.append("fileType", "Video");
+
+        var fileType = "video";
+
+        // Check for status of server 
+
+        //checkStatus("/RecordRTC/CheckStatus", fileName+".txt");
+        __log("Conversion started for ->" + fileName);
+
+        fileInConversion.push(fileName);
+
+        $.ajax({
+            type: 'POST',
+            url: '/AudioVideo/ConvertFile',
+            data: formData,
+            processData: false,
+            contentType: false
+        }).done(function (data) {
+
+            if (data.converted == true) {
+                var tempFileNameNoExt= data.inFileName.replace(/\.[^/.]+$/, "");
+                   var index = fileInConversion.indexOf(tempFileNameNoExt);
+                    if (index > -1) {
+                        fileInConversion.splice(index, 1);
+                    }
+
+                    fileConverted.push(data.outFileName);
+                    ++convertedFileCounter;
+
+                __log("File converted ->" + data.outFileName);
+                __log("-------------Convetred File counter -> " + convertedFileCounter); 
+            } else {
+                __log("Pair file not arrived yet. Try next time");
+            }
+
+        })
+        .error(function () {
+
+        });
+    }
+
+
+    function PostBlob(blob, fileType, fileName, mainFileName, callback) {
+        // FormData
+        console.log("Size " + blob.size);
+
+        var formData = new FormData();
+        formData.append(fileType + '-filename', fileName);
+        formData.append(fileType + '-blob', blob);
+        formData.append("chunkFileName", fileName);
+        formData.append("mainFileName", mainFileName);
+        formData.append("fileType", "Video");
+        //++activeAjaxConnections;
+
+        // add to uploading 
+        fileUploading.push(fileName);
+
+        var option = {
+            type: 'POST',
+            url: '/AudioVideo/PostRecordedAudioVideo',
+            data: formData,
+            processData: false,
+            contentType: false
+        };
+        $.ajax(option).done(function(data) {
+                var index = fileUploading.indexOf(data.fileName);
+                if (index > -1) {
+                    fileUploading.splice(index, 1);
+                }
+                //remove from store 
+
+                //var result = $.grep(backupStore, function(b){ return b.name == fileName; });
+                for (var i=0; i < backupStore.length; i++) {
+                    if (backupStore[i].name === data.fileName) {
+                        backupStore.splice(i, 1);
+                       break;
+                    }
+                }
+
+                callback(data);
+
+            })
+            .error(function () {
+                // Faild : add to failed 
+
+                fileUploadFailed.push(fileName);
+                var index = fileUploading.indexOf(fileName);
+                if (index > -1) {
+                    fileUploading.splice(index, 1);
+                }
+
+            });
+
+
+    }
+
+    /// Call when recording stopped to mergre all files and create final file 
+    function mergeChunkFiles(mainFileName) {
+        var option = {
+            url: "/AudioVideo/MergeChunkFiles",
+            type: "POST",
+            data: { mainFileName: mainFileName, fileType: "Video" }
+        };
+
+        $.ajax(option).done(function (data) {
+            __log("File merged ->" + data.fileName);
+            var video = document.createElement("video");
+            video.width = resolution_x-20;
+            video.height = resolution_y;
+            video.setAttribute("id", "video-preview");
+            video.src = data.filePath;
+            video.controls = true;
+            //container.appendChild(video);
+            video.play();
+             $("#video-preview").replaceWith(video);
+
+            showStatus("File uploaded successfully");
+            $("#audioFileName").val(data.fileName);
+
+            //container.appendChild(document.createElement('hr'));
+        });
+    }
+
+
+
+     function __log(msg) {
+        console.log(msg);
+    }
+
+     var showStatus = function (msg) {
+        var target = "#lblMessage";
+        var $target = $(target);
+        if (msg == "")
+            $target.removeClass("Message").hide();
+        else
+            $target.addClass("Message").text(msg).show();
+    };
+
+
+    function appendLink(blob) {
+        var a = document.createElement('a');
+        a.target = '_blank';
+        a.innerHTML = 'Open Recorded ' + (blob.type == 'audio/ogg' ? 'Audio' : 'Video') + ' No. ' + (index++) + ' (Size: ' + bytesToSize(blob.size) + ') Time Length: ' + getTimeLength(timeInterval);
+
+        a.href = URL.createObjectURL(blob);
+
+        container.appendChild(a);
+        container.appendChild(document.createElement('hr'));
+    }
+
+    function onMediaError(e) {
+        console.error('media error', e);
+    }
+
+    var container = document.getElementById('container');
+    var index = 1;
+
+    function bytesToSize(bytes) {
+        var k = 1000;
+        var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        if (bytes === 0) return '0 Bytes';
+        var i = parseInt(Math.floor(Math.log(bytes) / Math.log(k)), 10);
+        return (bytes / Math.pow(k, i)).toPrecision(3) + ' ' + sizes[i];
+    }
+
+    function getTimeLength(milliseconds) {
+        var data = new Date(milliseconds);
+        return data.getUTCHours() + " hours, " + data.getUTCMinutes() + " minutes and " + data.getUTCSeconds() + " second(s)";
+    }
+
+    window.onbeforeunload = function () {
+        document.querySelector('#record-video').disabled = false;
+    };
+    
+    
+
+    // -------------- Common Function --------------
+
+
+    // Upload VideoFile
+    function UploadVideoFile() {
+        // Upload Audio and Video Separatly
+        showStatus("Upload initiated ...");
+        PostBlob(recordAudio.getBlob(), 'audio', fileName + '.wav', audioUploadCallback);
+        PostBlob(recordVideo.getBlob(), 'video', fileName + '.webm', videoUploadCallback);
+
+        $("#video-preview,#stop-recording-video, #delete-video-file,#preview-video-file,#UploadVideo").hide();
+        $("#Processing").show();
+        showStatus("");
+    }  // Upload VideoFile
+
+    //Delete Video File
+    function deleteVideoData() {
+        if (confirm("Are you sure to delete the temporary file of video ?")) {
+            recordVideo = null;
+            recordAudio = null;
+            showStatus("Temporary file deleted");
+            $("#preview-video-file,#UploadVideo,delete-video-file").hide();
+        }
+
+    } //Delete Video File 
+
+
+    function showPreviewOfVideo() {
+
+        var PreviewAfterRec = document.getElementById("vid-pre");
+        document.getElementById("vid-pre").style.display = "block";
+        PreviewAfterRec.src = window.URL.createObjectURL(recordVideo.getBlob());
+        PreviewAfterRec.showcontrols = false;
+        PreviewAfterRec.play();
+        videoPreview.src = window.URL.createObjectURL(recordAudio.getBlob());
+        videoPreview.play();
+        PreviewAfterRec.onended = function (e) {
+            document.getElementById("vid-pre").style.display = 'none';
+
+            //setTimeout(document.getElementById("vid-pre").style.display = 'none', 1000);
+            //take some time to hide the preview
+        };
+    }
+
+    // ----------------------- DT ----------------------
+
+
+//    var PostBlob = function(blob, fileType, fileName, callback) {
+//        // FormData
+//        var formData = new FormData();
+//        formData.append(fileType + '-filename', fileName);
+//        formData.append(fileType + '-blob', blob);
+//        var option = {
+//            type: 'POST',
+//            url: '/Topic/PostRecordedAudioVideo',
+//            data: formData,
+//            processData: false,
+//            contentType: false
+//        };
+//        showStatus("Uploading chunks ...");
+//        $.ajax(option).done(callback).error(function() {}); //Ajax
+//    }; // PostBlob
+
+//    function MergeAudioVideo(fileName) {
+//        // FormData
+//        var formData = new FormData();
+//        formData.append("audio" + '-filename', fileName + ".wav");
+//        formData.append("video" + '-filename', fileName + ".webm");
+//        var fileType = "video";
+//        showStatus("We are processing video to show optimum quality. Please wait, This may take time.");
+
+//        $.ajax({
+//            type: 'POST',
+//            url: '/Topic/MergeAudioVideo',
+//            data: formData,
+//            processData: false,
+//            contentType: false
+//        }).done(function (data) {
+//            showStatus("Video uploaded successfully. Please fill below details to create artefact.");
+//            $("#Processing").hide();
+//            console.log("Converted successfully ->" + data);
+//            $("#audioFileName").val(data);
+//            
+//        }).error(function () {
+
+//        });
+//    }
+
+    var showStatus = function (msg) {
+        var target = "#lblMessage";
+        var $target = $(target);
+        if (msg == "")
+            $target.removeClass("Message").hide();
+        else
+            $target.addClass("Message").text(msg).show();
+    };
+
+    // ----------------------- DT ----------------------
+    
+    var logsPreview = document.getElementById('logs-preview');
+    var logDetails = "";
+    function log(message) {
+        var li = document.createElement('li');
+        li.innerHTML = message;
+        li.tabIndex = 0;
+        li.focus();
+    }
+</script>
+<style type="text/css">
+    .preview
+    {
+        background-color: #B8B8B8;
+        float: right;
+        height: 100px;
+        width: 100%;
+        text-align: center;
+        margin-top: 10px;
+    }
+    
+    .previewArtefact
+    {
+        vertical-align: middle;
+        height: 100px;
+        height: 75px;
+        width: 75px;
+    }
+    
+    .previewIframe
+    {
+        vertical-align: middle;
+        height: 100px;
+        width: 100%;
+    }
+    #audioRecorder
+    {
+        height: 150px;
+        width: 93%;
+        margin-left: 0px;
+        float: left;
+    }
+    .recorder_button
+    {
+        float: left;
+        clear: both;
+    }
+    .player_Cotainer
+    {
+        float: left;
+        width: 50%;
+    }
+    .preview_container
+    {
+        float: left;
+        width: 50%;
+        display: none;
+    }
+    .record_preview
+    {
+        width: 100%;
+        display: none;
+    }
+    .ui-jqdialog
+    {
+        display: none !important;
+    }
+</style>
+<script type="text/javascript">
+    function ShowWebcamRecorder() {
+        var testname = '<% =Request.Browser.Browser.ToString()  %>'
+        var isChrome = false;
+        if (testname == 'Chrome')
+            isChrome = true;
+
+        $("#statusMessage").hide();
+
+        if (isChrome) {
+            if ($('#audioFileName').val() != '') {
+
+                if (confirm("Current artefact file will be dropped if you do this, click OK to drop")) {
+                    $('#audioFileName').val('');
+                }
+
+            }
+            else {
+
+            }
+            if ($('#audioFileName').val() == '') {
+                $("#divAudioRecord").attr("class", "audio_record_tab");
+                $("#divwebcamRecorder").attr("class", "video_record_tab_selected");
+                $("#record-video").css("display", "block");
+                document.querySelector('#record-video').disabled = false;
+                document.querySelector('#stop-recording-video').disabled = true;
+                $("#audioRecorder").css("display", "none");
+                $("#btnCancel").css("display", "none");
+                $("#webcamRecorder").css("display", "block");
+
+                //These are modified during playing so set them visible or invisible
+                document.getElementById("video-preview").src = '';
+                document.querySelector('#record-video').style.display = "block";
+                document.getElementById("stop-recording-video").style.display = "block";
+                document.getElementById("Processing").style.display = "none";
+                document.getElementById("video-preview").style.display = "block";
+                document.getElementById("delete-video-file").style.display = "none";
+                document.getElementById("preview-video-file").style.display = "none";
+                document.getElementById("UploadVideo").style.display = "none";
+
+            }
+        } else {
+            $("#lblMessage").addClass('Message');
+            $("#lblMessage").text('Webcam record functionality is intended for Google Chrome only.');
+        }
+    }
+
+    $(document).ready(function () {
+
+        try {
+            $("#ui-datepicker-div").remove();
+            $("#dateReviewPicker").datepicker({ dateFormat: 'dd/mm/yy' });
+            $("#datepicker").datepicker({ dateFormat: 'dd/mm/yy' });
+        } catch (ex) {
+
+        }
+    });
+
+    function ShowRecorder() {
+
+        if ($('#audioFileName').val() != '') {
+
+            if (confirm("Current artefact file will be dropped if you do this, click OK to drop")) {
+                $('#audioFileName').val('');
+            }
+
+        }
+
+        if ($('#audioFileName').val() == '') {
+            var url = "../../Topic/GetAudioRecorder";
+            $.get(url, function (data) {
+                $('#audioRecorder').html(data);
+                $(".record_preview").css("display", "block");
+
+                $(".preview_container").css("display", "none");
+                $("#btnPreview").css("display", "none");
+                $("#btnCancel").css("display", "none");
+                $('#record-audio').css("display", 'block');
+
+                $('#record_preview').css("display", 'block');
+                $('#webcamRecorder').css("display", 'none');
+                $("#divAudioRecord").attr("class", "audio_record_tab_selected");
+                $("#divwebcamRecorder").attr("class", "video_record_tab");
+
+                var browser = get_browser_info();
+                if (browser.name == "MSIE") {
+                    $("#silverlightControlHost").show();
+                    $("#audioKMRecorder").hide();
+                } else {
+                    $("#silverlightControlHost").hide();
+                    $("#audioKMRecorder").show();
+                }
+            });
+            $("#lblMessage").removeClass("Message");
+            $("#lblMessage").text('');
+
+        }
+    }
+
+    function SaveAudioFile(content, filename) {
+        $("#audioFileName").val(filename);
+        $.ajax({
+            url: '/Topic/SaveArtefactFile',
+            data: { base64content: content, filename: filename },
+            traditional: true,
+            type: 'POST',
+            success: function (data) {
+                if (data) {
+
+                    $("#lblMessage").addClass("Message")
+                    $("#lblMessage").text("Audio file saved successfully. You can preview it before creating artefact or you can cancel it.");
+                    $("#audioFileName").val(filename);
+
+                    var url = "../../Topic/GetAudioRecorder";
+                    $.get(url, function (data) {
+                        $('#audioRecorder').html(data);
+                        $(".record_preview").css("display", "block");
+                        $("#divAudioRecord").attr("class", "audio_record_tab_selected");
+                        $("#btnPreview").css("display", "block");
+                        $("#btnCancel").css("display", "block");
+
+                    });
+
+
+                }
+            },
+
+            error: function (xhr, status, error) {
+                alert(status + ":" + error + ":" + xhr.responseText);
+
+            }
+
+        });
+    }
+
+    function DeleteAudioFile() {
+
+        var filename = $("#audioFileName").val();
+
+        if (filename != "") {
+            $.ajax({
+                url: '/Topic/DeleteArtefactFile',
+                data: { filename: filename },
+                traditional: true,
+                type: 'POST',
+                success: function (data) {
+                    $("#audioFileName").val("");
+                    $("#lblMessage").addClass("Message");
+                    $("#lblMessage").text("Artefact file is removed.")
+                    ShowRecorder();
+
+                },
+                error: function (xhr, status, error) {
+                    alert(status + ":" + error + ":" + xhr.responseText);
+
+                }
+
+            });
+        } else {
+            ShowRecorder();
+        }
+    }
+</script>
+<script type="text/javascript">
+
+    // This code shows the preview of recorded audio file.
+    function ShowPreview() {
+
+        var src = '../../<%= ConfigurationManager.AppSettings["artefactaudio"].ToString() %>' + $("#audioFileName").val();
+        $(".preview_container").css("display", "block");
+        var fileType = "audio";
+        //alert($("#audioFileName").val().indexOf('.mp4'));
+        if ($("#audioFileName").val().indexOf('.mp4') > 0)//its video ; override the prev settings
+        {
+            src = '../../<%= ConfigurationManager.AppSettings["artefactvideonormal"].ToString() %>' + $("#audioFileName").val();
+            fileType = "video";
+            //alert('in')
+        }
+
+
+
+        if (fileType == "image") {
+            $("#previewIframe").hide();
+            $("#previewImg").attr("src", src);
+            $("#previewImg").show();
+        }
+        else if (fileType == "pdf") {
+            $("#previewImg").hide();
+            $("#previewIframe").attr("src", src);
+            $("#previewIframe").show();
+        }
+        else if (fileType == "video" || fileType == "audio") {
+            //alert('disp')
+            $("#previewIframe").show();
+            $("#previewImg").hide();
+            $("#previewIframe").width("288px");
+            $("#previewIframe").height("168px");
+            $('#previewIframe').attr("src", "../ShowVideo?id=" + $("#audioFileName").val() + "&width=272px&height=150px&flowPlayerHeight=150px");
+            //alert(' src : "../ShowVideo?id=" + $("#audioFileName").val() + "&width=272px&height=150px&flowPlayerHeight=150px"');
+
+        }
+        else {
+            var srcNotavailable = '../../<%= ConfigurationManager.AppSettings["artefactvideonormal"].ToString() %>Preview_notavailable.jpg';
+            $("#previewIframe").hide();
+            $("#previewImg").attr("src", srcNotavailable);
+            $("#previewImg").show();
+        }
+
+
+    }
+
+    // This function creates the artefact inside the topic.
+    function SaveArtefact() {
+        if (validateArtefact()) {
+
+            $('#imgSave').prop("disabled", "true");
+            var artTitle = $("#txtTitle").val();
+            var artShortDescr = $("#txtShortDescription").val();
+            var hdnTopicDetailID = $("#hdnTopicDetailID").val();
+            var audioFilename = $("#audioFileName").val();
+            //            var reviewDate = $("#dateReviewPicker").val();
+            //            var expirydate = $("#datepicker").val();
+            //Commented by pk on 16-02-15 To remove date fields from create artefact
+            var Author = $("#txtAuthor").val();
+
+            //            var reviewDateValidation = ValidateDate(reviewDate);
+            //            var expirydateValidation = ValidateDate(expirydate);
+            //Commented by pk on 16-02-15 To remove date fields from create artefact
+            if (audioFilename == null || audioFilename == "") {
+                $('#imgSave').prop("disabled", "");
+                alert("File not found");
+                return false;
+            }
+            else if (hdnTopicDetailID == null || hdnTopicDetailID == "") {
+                $('#imgSave').prop("disabled", "");
+                alert("Topic not found");
+                return false;
+            }
+            //            else if (artTitle == null || artTitle == "") {
+            //                alert("Artefact title is required");
+            //                return false;
+            //            }
+            //            else if (reviewDateValidation != "") {
+            //                alert(reviewDateValidation);
+            //            }
+            //            else if (expirydateValidation != "") {
+
+            //                alert(expirydateValidation);
+            //            }
+            //Commented by pk on 16-02-15 To remove date fields from create artefact
+            else {
+
+
+
+                $.ajax({
+                    url: '/Topic/CreateArtefact',
+                    data: { topicDetailId: hdnTopicDetailID, artefactTitle: artTitle, description: artShortDescr, fileName: audioFilename, Author: Author }, //Removed reviewDate and expiryDate by pk on 16-02-15 To remove date fields from create artefact
+                    traditional: true,
+                    type: 'POST',
+                    success: function () {
+                        // ShowRecorder();
+                        $("#lblMessage").addClass("Message")
+
+                        $("#lblMessage").text("Artefact <%= Resources.Global.createmessage %>")
+                        $("#audioFileName").val(''); //reset file name if it's uploaded as we dont need it again
+                        location.reload();
+                    },
+                    error: function (xhr, status, error) {
+                        alert(status + ":" + error + ":" + xhr.responseText);
+                    }
+                });
+            }
+        }
+    }
+
+    //    Added by BKP : Event based working of webcam recorder
+    //    On 21-01-15
+    //    
+    
+
+</script>
+<input type="hidden" id="audioFileName" value="" />
+<input type="hidden" id="hdnProgress" value="0" />
+<input type="hidden" id="hdnTopicDetailID" value='<%=ViewData["topicDetailId"]%>' />
+<div id="pop-warper">
+    <div class="pop-content" id="write" style="min-height: 600px;">
+        <div class="pop-complete-body" style="width: 90%; margin-top: 40px;">
+            <div style="width: 100%; text-align: center">
+                <label id="lblMessage" style="text-align: center;">
+                </label>
+                
+                <div id="statusMessage" style="display:none">
+                </div>
+            </div>
+            <div class="pop_row">
+                <div class="pop_col_first">
+                    Select Record Type:</div>
+                <div class="pop_col_second">
+                    <div id="divAudioRecord" class="audio_record_tab" onclick="ShowRecorder()">
+                        <div class="record_text">
+                            <img src="../../Theme/<%=  System.Configuration.ConfigurationManager.AppSettings["theme"].ToString() %>/images/red_icon.png"
+                                style="float: left; margin-top: 3px; margin-right: 6px;" />Record Audio</div>
+                    </div>
+                    <%if (System.Configuration.ConfigurationManager.AppSettings["artefactwebcamrecorder"] == "true")
+{ %>
+<%-- Added by BKP : 12-02-2015 : for based video recorder functionality integration to the page --%>
+
+ <div id="divwebcamRecorder" class="video_record_tab" onclick="ShowWebcamRecorder()">
+  <div class="record_text">
+ <img src="../../Theme/<%=  System.Configuration.ConfigurationManager.AppSettings["theme"].ToString() %>/images/red_icon.png"
+ style="float: left; margin-top: 3px; margin-right: 6px;" />Record Video</div>
+                    </div>
+                    <%}
+                      else
+                      { %>
+
+                       <div id="divwebcamRecorder" class="video_record_tab" style=" opacity: 0.4 !important;filter:alpha(opacity=40); cursor:default">
+                        <div class="record_text">
+                            <img src="../../Theme/<%=  System.Configuration.ConfigurationManager.AppSettings["theme"].ToString() %>/images/red_icon.png"
+                                style="float: left; margin-top: 3px; margin-right: 6px;" />Record Video</div>
+                    </div>
+
+                    <%} %>
+
+                </div>
+            </div>
+            <div class="pop_row_separator">
+            </div>
+            <div class="pop_row">
+                <div class="pop_col_first">
+                    Record & Preview:</div>
+                <div class="pop_col_second" style="width: 70%">
+                    <%--Added by BKP : Webcam Recorder GUI
+                            On 21-01-15
+                    --%>
+                    <div id="video-preview">
+                    </div>
+                    <div id="webcamRecorder" style="display: none">
+                       <%-- <video id="video-preview" style="width: 355px; height: 280px"></video>--%>
+
+                        <video id="vid-pre" style="display: none; width: 355px; height: 280px"></video>
+                        <br />
+                       <%-- <button id="record-video" class="popup_button" onclick="ShowWebcamRecorder()">
+                            Record</button>--%>
+                        <button id="record-video" class="popup_button">
+                            Record</button>
+                        <button id="stop-recording-video" class="popup_button" disabled>
+                            Stop</button>
+                        <button id="preview-video-file" class="popup_button" style="display: none" onclick="showPreviewOfVideo();return false;">
+                            Show Preview</button>
+                        <button id="delete-video-file" class="popup_button" onclick="deleteVideoData()" style="display: none">
+                            Delete File</button>
+                        <button id="UploadVideo" class="popup_button" onclick="UploadVideoFile()">
+                            Upload</button>
+                        <p>
+                        </p>
+                        <label id="Processing-Status">
+                        </label>
+                        <img id="Processing" alt="Processing" style="display: none" src="../../Theme/<%=  System.Configuration.ConfigurationManager.AppSettings["theme"].ToString() %>/Images/demo_wait.gif" />
+                    </div>
+                    <%--End--%>
+                    <div class="record_preview">
+                        <div class="player_Cotainer">
+                            <div id="audioRecorder">
+                            </div>
+                            <div class="recorder_button">
+                                <button class="popup_button" onclick="DeleteAudioFile();return false" id="btnCancel"
+                                    style="float: left;" value="Cancel">
+                                    Cancel</button>
+                                <button class="popup_button" onclick="ShowPreview();return false" id="btnPreview"
+                                    style="float: left; display: none" value="Preview">
+                                    Preview</button>
+                            </div>
+                        </div>
+                        <div class="preview_container" style="display: none">
+                            <div id="previewUpload" style="margin-top: 0px" class="preview">
+                                <span class="helper"></span>
+                                <img id="previewImg" class="previewArtefact" style="display: none" />
+                                <iframe id="previewIframe" src='' class="previewIframe"></iframe>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="pop_row_separator">
+            </div>
+            <div class="pop_row">
+                <div class="pop_col_first">
+                    Artefact Headers:</div>
+                <div class="pop_col_second">
+                    <div class="content-Label-head" style="margin-top: 5px;">
+                        Title:<span class="redstar" style="float: none; margin-left: 0;">*</span> <span>
+                            <label id="arttit" style="color: Red; font-size: 12px !important; font-weight: normal;">
+                            </label>
+                        </span>
+                    </div>
+                    <%-- <div class="redstar">*</div>--%><%--<div>
+							 <label id="arttit" style="color:Red;float:left;font-size:12px !important;font-weight:normal;"></label>
+							</div>--%>
+                    <div class="text-box" style="padding-top: 5px;">
+                        <div class="text-box-top">
+                            <div class="text-box-left-top">
+                                <div class="text-box-right-top">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-box-mid">
+                            <div class="text-box-left-mid">
+                                <div class="text-box-right-mid">
+                                    <input type="text" id="txtTitle" class="innerText" placeholder="Title" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-box-bot">
+                            <div class="text-box-left-bot">
+                                <div class="text-box-right-bot">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="content-Label-head">
+                        Description:<%--<span class="redstar" style="float: none; margin-left: 0;">*</span>--%>
+                        <%--commented by Rw for ck-1028--%>
+                        <span>
+                            <label id="artdes" style="color: Red; font-size: 12px !important; font-weight: normal;">
+                            </label>
+                        </span>
+                    </div>
+                    <%--<div class="redstar">*</div>--%><%--<div>
+							 <label id="artdes" style="color:Red;float:left;font-size:12px !important;font-weight:normal;"></label>
+							</div>--%>
+                    <div class="text-box" style="padding-top: 5px;">
+                        <div class="text-box-top">
+                            <div class="text-box-left-top">
+                                <div class="text-box-right-top">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-box-mid">
+                            <div class="text-box-left-mid">
+                                <div class="text-box-right-mid">
+                                    <textarea class="innerText" cols="20" id="txtShortDescription" placeholder="Description"
+                                        maxlength="1001" rows="4"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-box-bot">
+                            <div class="text-box-left-bot">
+                                <div class="text-box-right-bot">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="content-Label-head">
+                        Author:</div>
+                    <div class="text-box" style="padding-top: 5px;">
+                        <div class="text-box-top">
+                            <div class="text-box-left-top">
+                                <div class="text-box-right-top">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-box-mid">
+                            <div class="text-box-left-mid">
+                                <div class="text-box-right-mid">
+                                    <%--  <input type="text" id="txtRev" class="innerText" />--%>
+                                    <input id="txtAuthor" name="txtAuthor" type="text" placeholder="Author" class="innerText" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-box-bot">
+                            <div class="text-box-left-bot">
+                                <div class="text-box-right-bot">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <%-- <div class="content-Label-head">
+                            Review Date:</div>
+                        <div class="text-box" style="padding-top: 5px;">
+                            <div class="text-box-top">
+                                <div class="text-box-left-top">
+                                    <div class="text-box-right-top">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-box-mid">
+                                <div class="text-box-left-mid">
+                                    <div class="text-box-right-mid">
+                                        <%--  <input type="text" id="txtRev" class="innerText" />
+                                        <input id="dateReviewPicker" name="txtReview" type="text" value=" <%=ViewData["curDate"]%>"
+                                            readonly="readonly" class="innerText" style="font-size: 12px;" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-box-bot">
+                                <div class="text-box-left-bot">
+                                    <div class="text-box-right-bot">
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                            <div class="content-Label-head">
+                                Expiry Date:</div>
+                            <%-- <div class="redstar">*</div><div>
+							 <label id="Label1" style="color:Red;float:left;font-size:12px !important;font-weight:normal;"></label>
+							</div>
+                            <div class="text-box" style="padding-top: 5px;">
+                                <div class="text-box-top">
+                                    <div class="text-box-left-top">
+                                        <div class="text-box-right-top">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-box-mid">
+                                    <div class="text-box-left-mid">
+                                        <div class="text-box-right-mid">
+                                            <%--  <input type="text" id="txtExp" class="innerText" />
+                                            <input id="datepicker" name="txtExpiry" type="text" class="innerText" value=" <%=ViewData["curDate"]%>"
+                                                readonly="readonly" style="font-size: 12px;" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-box-bot">
+                                    <div class="text-box-left-bot">
+                                        <div class="text-box-right-bot">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>--%><%--//Commented by pk on 16-02-15 To remove date fields from create artefact--%>
+                </div>
+                <%--   <div class="pop_row_separator"></div>
+            <button class="pop-bt" name="btn" type="submit" onclick="SaveArtefact()" title="Save">
+                Save</button>
+            <button class="pop-bt" name="btn" type="reset" onclick="bclose();" title="Cancel">
+                Cancel</button>
+        </div>--%>
+                <div class="floatingPanel">
+                    <span>
+                        <input type="image" name="imgSave" id="imgSave" type="submit" onclick="return SaveArtefact()"
+                            title="Save" value="Save" class="SavePanel" title="Save" src="../../Theme/<%=  System.Configuration.ConfigurationManager.AppSettings["theme"].ToString() %>/images/save_button 40x40.png" />
+                        <input type="image" name="imgCancel" id="imgCancel" type="submit" onclick="return bclose()"
+                            title="Cancel" value="Cancel" style="cursor: pointer; margin-left: 12px;" title="Cancel"
+                            src="../../Theme/<%=  System.Configuration.ConfigurationManager.AppSettings["theme"].ToString() %>/images/cancel_button_40x40.png" />
+                    </span>
+                </div>
+                <script type="text/javascript">
+                    $(document).ready(function () {
+                        parent.$(".processing_iconPopup").hide();
+                        $("#txtTitle").on("keypress", function (e) {
+                            if (e.which === 32 && !this.value.length)
+                                e.preventDefault();
+                        });
+                        $("#txtShortDescription").on("keypress", function (e) {
+                            if (e.which === 32 && !this.value.length)
+                                e.preventDefault();
+                        });
+                    });
+
+                </script>
+				
+				
+				
+----------------  Controller ----------
+
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Web;
+using System.Web.Mvc;
+
+namespace UI.Controllers.AdioVideo
+{
+    public class AudioVideoController : Controller
+    {
+        // ---/RecordRTC/
+
+        string path = AppDomain.CurrentDomain.BaseDirectory + "UserData/Artefact/";
+
+        string audioFilesPath = AppDomain.CurrentDomain.BaseDirectory + "UserData/Artefact/Audio/";
+        string videoFilesPath = AppDomain.CurrentDomain.BaseDirectory + "UserData/Artefact/Video/";
+
+        // ---/RecordRTC/PostRecordedAudioVideo
+        [HttpPost]
+        public ActionResult PostRecordedAudioVideo()
+        {
+            string fileType = Request.Form["fileType"];
+            var folderPath = Path.Combine(path, Request.Form["mainFileName"]);
+            if (fileType == "Video")
+            {
+                folderPath = Path.Combine(videoFilesPath, Request.Form["mainFileName"]);
+            }
+
+            if (fileType == "Audio")
+            {
+                folderPath = Path.Combine(audioFilesPath, Request.Form["mainFileName"]);
+            }
+
+            var chunkFileName = Path.Combine(folderPath, Request.Form["chunkFileName"]);
+            var mainFileName = Path.Combine(folderPath, Request.Form["mainFileName"]);
+
+            //string temp = Path.ChangeExtension(Request.Form["chunkFileName"], ".txt");
+
+            var logFile = Path.Combine(folderPath, mainFileName + "-log.txt"); //AppDomain.CurrentDomain.BaseDirectory + "uploads/log.txt";
+
+            CheckForDirectory(folderPath);
+
+            // WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Uploading ..."}, true);
+            foreach (string upload in Request.Files)
+            {
+                var file = Request.Files[upload];
+                if (file == null) continue;
+
+                file.SaveAs(chunkFileName);
+
+            }
+
+            //WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Some chunks uploaded ..."}, true);
+            return Json(new {fileName = Request.Form[0], uploaded=true, type=fileType});
+        }
+
+
+
+        // ---/RecordRTC/DeleteFile
+        [HttpPost]
+        public ActionResult DeleteFile()
+        {
+            var fileUrl = AppDomain.CurrentDomain.BaseDirectory + "uploads/" + Request.Form["delete-file"];
+            new FileInfo(fileUrl + ".wav").Delete();
+            new FileInfo(fileUrl + ".webm").Delete();
+            return Json(true);
+        }
+
+        // ---/RecordRTC/DeleteFile
+        [HttpPost]
+        public ActionResult ConvertFile()
+        {
+            var folderPath = Path.Combine(videoFilesPath + Request.Form["mainFileName"] + "/");
+            var audioFile = Path.Combine(folderPath + Request.Form["audio-filename"]);
+            var videoFile = Path.Combine(folderPath + Request.Form["video-filename"]);
+            var convertCounter = Convert.ToInt16(Request.Form["convertCounter"]);
+            string mainFile = Request.Form["mainFileName"];
+
+            //var mp4File = Path.ChangeExtension(audioFile, ".webm");
+            var temp = Path.GetFileNameWithoutExtension(videoFile);
+            var output = Path.Combine(folderPath, temp + "v" + ".webm");
+
+            var logFile = Path.Combine(folderPath, temp, temp + ".txt");
+            var logFileConversion = Path.Combine(folderPath, mainFile + "-con-log.txt");
+
+            WriteLog(logFileConversion, "+++++++++++++++++++++++++++ Request for conversion ++++++++++++");
+            WriteLog(logFileConversion, "Audio File -> " + Request.Form["audio-filename"] + "Video File ->" + Request.Form["video-filename"]);
+
+
+            string outFile = "";
+
+            // WriteLog(logFile,new Status { State = "inProgress", StatusCode = 2, StatusMessage = "File conversion started ..."}, true);
+
+            if (System.IO.File.Exists(audioFile) && System.IO.File.Exists(videoFile))
+            {
+                WriteLog(logFileConversion,
+                    "---------------------------------------------File Found : Convert it !--------------------------------");
+                WriteLog(logFileConversion, "FileName : " + audioFile + " " + videoFile);
+
+                outFile = ConvertFile(audioFile, videoFile, output, logFileConversion);
+
+                var tempOutFile = AppDomain.CurrentDomain.BaseDirectory + "UserData\\Artefact\\Video\\" + mainFile + "\\" + outFile;
+                // outFile = folderPath +"\\"+outFile;
+                string fileContent = String.Format("file \'{0}\' \n", tempOutFile);
+                var mergeFile = Path.Combine(folderPath, mainFile + ".txt");
+                System.IO.File.AppendAllText(mergeFile, fileContent);
+                convertCounter++;
+
+                return Json(new { counter = convertCounter, converted = true, outFileName = Path.GetFileName(outFile), inFileName = Path.GetFileName(audioFile), message = "done" });
+            }
+
+            return Json(new { counter = convertCounter, converted = false, outFileName = Path.GetFileName(outFile), inFileName = Path.GetFileName(audioFile), message = "file not arrieved yet" });
+        }
+
+        // 
+        //[HttpGet]
+        //public JsonResult CheckStatus(string logFile)
+        //{
+        //    var file = AppDomain.CurrentDomain.BaseDirectory + "uploads/" + logFile;
+
+        //    if (System.IO.File.Exists(file))
+        //    {
+        //        string statusContent = "";
+        //        try
+        //        {
+        //            statusContent = System.IO.File.ReadAllText(file);
+        //            // If Conversion completed delete log file
+
+        //            if (statusContent.Contains("\"State\":\"completed\""))
+        //            {
+        //                new FileInfo(file).Delete();
+        //            }
+        //        }
+        //        catch (Exception e)
+        //        {
+                   
+        //            return Json(fileLocked, JsonRequestBehavior.AllowGet);
+        //        }
+        //        if (statusContent == "")
+        //        {
+        //            return Json(s, JsonRequestBehavior.AllowGet);
+        //        }
+
+        //        return Json(statusContent, JsonRequestBehavior.AllowGet);
+        //    }
+        //    else
+        //    {
+        //        return Json(s, JsonRequestBehavior.AllowGet);
+        //    }
+        //}
+
+        [HttpPost]
+        public JsonResult MergeChunkFiles(string mainFileName)
+        {
+            var fileType = Request.Form["fileType"];
+            var mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "UserData\\Artefact\\Video\\" + mainFileName + "\\" + mainFileName + ".txt";
+            var folderPath = Path.Combine(videoFilesPath , mainFileName);
+            var outputFile = Path.Combine(folderPath, mainFileName + ".webm");
+            var finalFileFolder = Path.Combine(videoFilesPath , "Normal/");
+            var finalFile = finalFileFolder + mainFileName + ".webm";
+            if (fileType == "Video")
+            {
+                folderPath = Path.Combine(videoFilesPath , mainFileName);
+                mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "UserData\\Artefact\\Video\\" + mainFileName + "\\" + mainFileName + ".txt";
+                outputFile = Path.Combine(folderPath, mainFileName + ".webm");
+                finalFileFolder = Path.Combine(videoFilesPath, "Normal/");
+                finalFile = finalFileFolder + mainFileName + ".webm";
+            }
+            if (fileType == "Audio")
+            {
+                folderPath = Path.Combine(audioFilesPath , mainFileName);
+                mergerTxtFile = AppDomain.CurrentDomain.BaseDirectory + "UserData\\Artefact\\Audio\\" + mainFileName + "\\" + mainFileName + ".txt";
+                outputFile = Path.Combine(folderPath, mainFileName + ".wav");
+                MergeChunkFiles(mergerTxtFile, outputFile);
+                finalFileFolder = Path.Combine(audioFilesPath, "Normal/");
+                finalFile = finalFileFolder + mainFileName + ".wav";
+                return Json("Video/" + mainFileName + "/" + mainFileName + ".wav");
+
+
+            }
+
+            //var mergerTxtFile = Path.Combine(folderPath, mainFileName + ".txt");//folderPath + "/" + mainFileName + ".txt";
+
+            MergeChunkFiles(mergerTxtFile, outputFile);
+            //Move finale file to folder
+
+             
+            System.IO.File.Move(outputFile,finalFile);
+            Directory.Delete(folderPath, true);
+            return Json(new { fileName = mainFileName + ".webm", filePath = "/UserData/Artefact/Video/Normal/" + mainFileName + ".webm" });
+
+        }
+
+        private void MergeChunkFiles(string mergerTxtFile, string outputFile)
+        {
+            var exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Converter/ffmpeg.exe");
+
+            //ffmpeg -f concat -i f.txt -c copy Audio1.wav
+            var parameters = String.Format("-f concat -i {0} -c copy {1}", mergerTxtFile, outputFile);
+            bool isOwerWriteLog = true;
+
+            using (Process p = new Process())
+            {
+                p.StartInfo.UseShellExecute = false;
+                p.StartInfo.CreateNoWindow = true;
+                p.StartInfo.RedirectStandardOutput = true;
+                p.StartInfo.RedirectStandardError = true;
+                p.StartInfo.FileName = exePath;
+                p.StartInfo.Arguments = parameters;
+                p.Start();
+                StreamReader reader = p.StandardError;
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    System.IO.File.AppendAllText(mergerTxtFile + "-merge-log.txt", line);
+                }
+                p.WaitForExit();
+                //var result = p.StandardOutput.ReadToEnd();
+            } // Using
+        }
+
+
+        private string ConvertFile(string wavFile, string webmFile, string mp4File, string logFile)
+        {
+            var exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Converter/ffmpeg.exe");
+            var parameters = String.Format(" -i {0} -i {1} {2}", wavFile, webmFile, mp4File);
+            bool isOwerWriteLog = true;
+
+            WriteLog(logFile, "-----------Init-------------");
+
+            WriteLog(logFile, "Parameters ->" + parameters);
+            using (Process p = new Process())
+            {
+                p.StartInfo.UseShellExecute = false;
+                p.StartInfo.CreateNoWindow = true;
+                p.StartInfo.RedirectStandardOutput = true;
+                p.StartInfo.RedirectStandardError = true;
+                p.StartInfo.FileName = exePath;
+                p.StartInfo.Arguments = parameters;
+
+                WriteLog(logFile, "-----------Starting convrsion -------- ");
+
+                WriteLog(logFile, "Audio file  " + wavFile);
+                WriteLog(logFile, "Video File" + webmFile);
+
+                p.Start();
+
+
+                #region ProcessBar
+
+                StreamReader reader = p.StandardError;
+                string line;
+                // Read Line by line 
+                decimal totalDuration = 0.0m;
+                decimal currentDuration = 0.0m;
+                decimal percentage = 0.0m;
+                // WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = "Initializing converter ..." }, isOwerWriteLog);
+                while ((line = reader.ReadLine()) != null)
+                {
+                    //Get total Duration 
+                    // MatchCollection matchCollection = Regex.Matches(line, "Duration: (.*?), bitrate:");
+                    MatchCollection matchCollection = Regex.Matches(line, "Duration: [0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{2}, bitrate:");
+                    if (matchCollection.Count > 0)
+                    {
+
+                        string rawDuration = Regex.Match(matchCollection[0].Value, "[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{2}").ToString();
+                        string[] tempSplit = rawDuration.Split(':');
+                        int hrs = Convert.ToInt16(tempSplit[0]);
+                        int min = Convert.ToInt16(tempSplit[1]);
+                        decimal sec = Convert.ToDecimal(tempSplit[2]);
+                        totalDuration = hrs * 60 * 60 + min * 60 + sec;
+                    }
+
+                    // Get current duration 
+
+                    Match match = Regex.Match(line, "time=(.*?) bitrate");
+                    if (match.Value != "")
+                    {
+                        string rawTime = Regex.Match(match.Value, "[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{2}").ToString();
+                        string[] tempSplit = rawTime.Split(':');
+                        int hrs = Convert.ToInt16(tempSplit[0]);
+                        int min = Convert.ToInt16(tempSplit[1]);
+                        decimal sec = Convert.ToDecimal(tempSplit[2]);
+                        currentDuration = hrs * 60 * 60 + min * 60 + sec;
+                    }
+
+                    if (currentDuration != 0.0m)
+                    {
+                        percentage = currentDuration / totalDuration * 100;
+                        string msg = String.Format("Progress : {0} %", percentage.ToString("F"));
+
+                        WriteLog(logFile, msg);
+                        // WriteLog(logFile, new Status { State = "inProgress", StatusCode = 2, StatusMessage = msg}, isOwerWriteLog);
+                    }
+                } // While line
+
+                //WriteLog(logFile, new Status { State = "completed", StatusCode = 4, StatusMessage = "Done !" }, isOwerWriteLog);
+
+                #endregion
+
+                p.WaitForExit();
+                //var result = p.StandardOutput.ReadToEnd();
+            } // Using 
+
+            //Delete raw file 
+            //new FileInfo(wavFile).Delete();
+            //new FileInfo(webmFile).Delete();
+
+            WriteLog(logFile, "---------------- Completed ---------- File : " + mp4File);
+            return Path.GetFileName(mp4File);
+
+        }
+
+
+
+
+        public static bool WriteLog(string path, string content, bool isOverWrite = false)
+        {
+            if (isOverWrite)
+                System.IO.File.WriteAllText(path, content);
+            else
+                System.IO.File.AppendAllText(path, content + "\n");
+
+            return true;
+        }
+
+
+        //public static bool WriteLog(string path, Status content, bool isOverWrite)
+        //{
+        //    var json = new JavaScriptSerializer().Serialize(content);
+        //    try
+        //    {
+        //        if (isOverWrite)
+        //            System.IO.File.WriteAllText(path, json);
+        //        else
+        //            System.IO.File.AppendAllText(path, json + "\n");
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        return false;
+        //    }
+        //    return true;
+        //}
+
+        public static void CheckForDirectory(string dirPath)
+        {
+            if (!Directory.Exists(dirPath))
+                Directory.CreateDirectory(dirPath);
+
+        }
+    }
+}
+
+
+
 
